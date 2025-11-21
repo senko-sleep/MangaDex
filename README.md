@@ -381,3 +381,4 @@ For issues and questions, please create an issue in the repository.
 ---
 
 **Built with ❤️ using Next.js, MongoDB, and modern web technologies**
+# MangaDex
