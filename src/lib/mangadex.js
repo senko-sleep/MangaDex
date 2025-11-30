@@ -1,6 +1,14 @@
 // MangaDex API for direct chapter page fetching
 const MANGADEX_API = 'https://api.mangadex.org';
 
+// Proxy base URL - routes images through backend to bypass hotlink protection
+const PROXY_BASE = import.meta.env.VITE_API_URL || 'https://mangadex-i6sv.onrender.com';
+
+// Helper to create proxied image URL
+function proxyUrl(url) {
+  return `${PROXY_BASE}/api/proxy/image?url=${encodeURIComponent(url)}`;
+}
+
 // Cache for at-home server responses
 const atHomeCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (MangaDex at-home tokens last ~15 mins)
@@ -77,10 +85,11 @@ export async function getChapterPages(chapterId) {
     const baseUrl = atHomeData.baseUrl;
     const hash = atHomeData.chapter.hash;
     
-    // Build page URLs - MangaDex CDN allows direct access (no proxy needed)
+    // Build page URLs - proxy through backend to bypass hotlink protection
     const highQualityPages = (atHomeData.chapter.data || []).map((file, i) => ({
       page: i + 1,
-      url: `${baseUrl}/data/${hash}/${file}`,
+      url: proxyUrl(`${baseUrl}/data/${hash}/${file}`),
+      originalUrl: `${baseUrl}/data/${hash}/${file}`,
       quality: 'high',
       isExternal: false,
     }));
@@ -88,7 +97,8 @@ export async function getChapterPages(chapterId) {
     // Data saver (lower quality) pages as fallback
     const dataSaverPages = (atHomeData.chapter.dataSaver || []).map((file, i) => ({
       page: i + 1,
-      url: `${baseUrl}/data-saver/${hash}/${file}`,
+      url: proxyUrl(`${baseUrl}/data-saver/${hash}/${file}`),
+      originalUrl: `${baseUrl}/data-saver/${hash}/${file}`,
       quality: 'low',
       isExternal: false,
     }));
@@ -208,13 +218,18 @@ export async function getMangaDetails(mangaId) {
     const titles = manga.attributes?.title || {};
     const descriptions = manga.attributes?.description || {};
     
+    // Proxy cover URL through backend
+    const coverUrl = cover 
+      ? proxyUrl(`https://uploads.mangadex.org/covers/${cleanMangaId}/${cover}`)
+      : null;
+
     return {
       id: mangaId,
       sourceId: 'mangadex',
       slug: cleanMangaId,
       title: titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown',
       description: descriptions.en || descriptions['en-us'] || Object.values(descriptions)[0] || '',
-      coverUrl: cover ? `https://uploads.mangadex.org/covers/${cleanMangaId}/${cover}` : null,
+      coverUrl,
       status: manga.attributes?.status,
       contentRating: manga.attributes?.contentRating,
       author,
