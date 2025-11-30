@@ -1,22 +1,16 @@
-// Utility to normalize cover URLs to always use MangaDex CDN directly
+// Utility to proxy cover URLs through our backend to bypass hotlink protection
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 /**
- * Extracts and normalizes cover URL to use MangaDex CDN directly
- * Handles proxy URLs, wrong domains, etc.
+ * Wraps a MangaDex image URL in our proxy to bypass hotlink protection
  */
 export function normalizeCoverUrl(url) {
   if (!url) return null;
   
-  // If it's a proxy URL, extract the original URL
+  // Already proxied
   if (url.includes('/api/proxy/image?url=')) {
-    try {
-      const match = url.match(/[?&]url=([^&]+)/);
-      if (match) {
-        url = decodeURIComponent(match[1]);
-      }
-    } catch (e) {
-      // Continue with original URL
-    }
+    return url;
   }
   
   // Fix wrong domain: mangadex.org/covers -> uploads.mangadex.org/covers
@@ -26,12 +20,16 @@ export function normalizeCoverUrl(url) {
   
   // Ensure it uses uploads.mangadex.org for covers
   if (url.includes('/covers/') && !url.startsWith('https://uploads.mangadex.org')) {
-    // Extract manga ID and filename from URL
     const match = url.match(/covers\/([a-f0-9-]+)\/([^?]+)/);
     if (match) {
       const [, mangaId, filename] = match;
       url = `https://uploads.mangadex.org/covers/${mangaId}/${filename}`;
     }
+  }
+  
+  // Proxy all MangaDex CDN URLs to bypass hotlink protection
+  if (url.includes('mangadex.org') || url.includes('cmdxd98sb0x3yprd.mangadex.network')) {
+    return `${API_BASE}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
   
   return url;
