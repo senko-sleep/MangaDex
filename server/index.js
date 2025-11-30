@@ -12,9 +12,21 @@ const imageCache = new Map();
 const CACHE_MAX_SIZE = 500; // Max cached images (increased for better performance)
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-app.use(helmet({ contentSecurityPolicy: false }));
+// Configure helmet to allow cross-origin image loading
+app.use(helmet({ 
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(compression());
-app.use(cors());
+
+// Configure CORS to allow all origins for the image proxy
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+}));
 app.use(express.json());
 
 // Image proxy endpoint - bypasses hotlink protection
@@ -24,6 +36,10 @@ app.get('/api/proxy/image', async (req, res) => {
   if (!imageUrl) {
     return res.status(400).send('Missing url parameter');
   }
+
+  // Set CORS headers explicitly for image responses
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
 
   try {
     // Check cache first
@@ -42,9 +58,6 @@ app.get('/api/proxy/image', async (req, res) => {
         'Referer': 'https://mangadex.org/',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Fetch-Dest': 'image',
-        'Sec-Fetch-Mode': 'no-cors',
-        'Sec-Fetch-Site': 'cross-site',
       },
     });
 
