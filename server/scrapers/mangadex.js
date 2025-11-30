@@ -117,7 +117,7 @@ export class MangaDexScraper extends BaseScraper {
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
     
     // Direct MangaDex cover URL (works fine in browsers)
-    const coverUrl = cover ? `https://mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
+    const coverUrl = cover ? `https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
     
     return {
       id: `mangadex:${m.id}`,
@@ -160,7 +160,7 @@ export class MangaDexScraper extends BaseScraper {
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
       
       // Direct MangaDex cover URL
-      const coverUrl = cover ? `https://mangadex.org/covers/${mangaId}/${cover}` : null;
+      const coverUrl = cover ? `https://uploads.mangadex.org/covers/${mangaId}/${cover}` : null;
 
       return {
         id,
