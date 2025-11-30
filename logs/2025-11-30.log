@@ -1,0 +1,35 @@
+[2025-11-30T03:11:16.549Z] [INFO] [DATABASE] Created data directory
+[2025-11-30T03:11:16.570Z] [INFO] [SOURCES] Search complete: 0 unique results from 0 sources
+[2025-11-30T03:11:16.575Z] [INFO] [SOURCES] Search complete: 0 unique results from 0 sources
+[2025-11-30T03:11:16.581Z] [INFO] [API:SEARCH] GET /api/manga/search?q= 200 39ms
+[2025-11-30T03:11:16.602Z] [INFO] [API:SEARCH] GET /api/manga/search?q= 200 34ms
+[2025-11-30T03:16:10.616Z] [WARN] [SOURCE:MangaSee] Request failed: https://mangasee123.com/search/?name= | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:10.694Z] [WARN] [SOURCE:MangaSee] Search failed | {"query":"","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:12.183Z] [INFO] [SOURCES] Search complete: 0 results
+[2025-11-30T03:16:12.202Z] [INFO] [API:SEARCH] GET /api/manga/search?q= 200 5379ms
+[2025-11-30T03:16:12.745Z] [INFO] [SOURCES] Search complete: 24 results
+[2025-11-30T03:16:12.984Z] [INFO] [API:SEARCH] GET /api/manga/search?q= 200 322ms
+[2025-11-30T03:16:53.854Z] [INFO] [API:MANGA_DETAIL] GET /api/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475 - 6ms (cached: true)
+[2025-11-30T03:16:54.007Z] [INFO] [API:MANGA_DETAIL] GET /api/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475 - 4ms (cached: true)
+[2025-11-30T03:16:54.225Z] [WARN] [SOURCE:MangaDex] Request failed: https://api.mangadex.org/chapter?manga=59ee5b99-cae7-4c50-a50a-731dc1dc8475&limit=500&translatedLanguage%5B%5D=en&order%5Bchapter%5D=asc | {"error":"HTTP 400: Bad Request"}
+[2025-11-30T03:16:54.234Z] [WARN] [SOURCE:MangaDex] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 400: Bad Request"}
+[2025-11-30T03:16:54.308Z] [WARN] [SOURCE:nhentai] Request failed: https://nhentai.net/g/59ee5b99-cae7-4c50-a50a-731dc1dc8475/ | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.311Z] [WARN] [SOURCE:nhentai] Get details failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.373Z] [WARN] [SOURCE:MangaSee] Request failed: https://mangasee123.com/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475 | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.381Z] [WARN] [SOURCE:MangaSee] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.573Z] [WARN] [SOURCE:HentaiRead] Request failed: https://hentairead.com/hentai/59ee5b99-cae7-4c50-a50a-731dc1dc8475/ | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.578Z] [WARN] [SOURCE:HentaiRead] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:54.581Z] [INFO] [API:CHAPTERS] GET /api/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475/chapters - 0 chapters (758ms)
+[2025-11-30T03:16:54.722Z] [WARN] [SOURCE:MangaDex] Request failed: https://api.mangadex.org/chapter?manga=59ee5b99-cae7-4c50-a50a-731dc1dc8475&limit=500&translatedLanguage%5B%5D=en&order%5Bchapter%5D=asc | {"error":"HTTP 400: Bad Request"}
+[2025-11-30T03:16:54.725Z] [WARN] [SOURCE:MangaDex] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 400: Bad Request"}
+[2025-11-30T03:16:55.002Z] [WARN] [SOURCE:MangaSee] Request failed: https://mangasee123.com/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475 | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.004Z] [WARN] [SOURCE:MangaSee] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.498Z] [WARN] [SOURCE:nhentai] Request failed: https://nhentai.net/g/59ee5b99-cae7-4c50-a50a-731dc1dc8475/ | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.501Z] [WARN] [SOURCE:nhentai] Get details failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.708Z] [WARN] [SOURCE:HentaiRead] Request failed: https://hentairead.com/hentai/59ee5b99-cae7-4c50-a50a-731dc1dc8475/ | {"error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.711Z] [WARN] [SOURCE:HentaiRead] Get chapters failed | {"mangaId":"59ee5b99-cae7-4c50-a50a-731dc1dc8475","error":"HTTP 404: Not Found"}
+[2025-11-30T03:16:55.714Z] [INFO] [API:CHAPTERS] GET /api/manga/59ee5b99-cae7-4c50-a50a-731dc1dc8475/chapters - 0 chapters (1025ms)
+[2025-11-30T03:35:30.271Z] [INFO] [API:MANGA_DETAIL] GET /api/manga/f76a2f73-6f9c-4c23-85f1-4a59505615f4 - 583ms (cached: false)
+[2025-11-30T03:35:30.699Z] [INFO] [API:CHAPTERS] GET /api/manga/f76a2f73-6f9c-4c23-85f1-4a59505615f4/chapters - 0 chapters (819ms)
+[2025-11-30T03:35:30.924Z] [INFO] [API:MANGA_DETAIL] GET /api/manga/f76a2f73-6f9c-4c23-85f1-4a59505615f4 - 3ms (cached: true)
+[2025-11-30T03:35:32.514Z] [INFO] [API:CHAPTERS] GET /api/manga/f76a2f73-6f9c-4c23-85f1-4a59505615f4/chapters - 0 chapters (1031ms)

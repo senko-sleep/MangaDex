@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Book -->
+  <path d="M12 8 L12 52 C12 54 14 56 16 56 L44 56 C46 56 48 54 48 52 L48 8 C48 6 46 4 44 4 L16 4 C14 4 12 6 12 8 Z" fill="#27272a"/>
+  <path d="M16 8 L16 52 L44 52 L44 8 Z" fill="#3f3f46"/>
+  <path d="M12 8 L12 52 C12 54 14 56 16 56 L16 4 C14 4 12 6 12 8 Z" fill="#f97316"/>
+  
+  <!-- Book lines -->
+  <line x1="22" y1="16" x2="38" y2="16" stroke="#52525b" stroke-width="2" stroke-linecap="round"/>
+  <line x1="22" y1="24" x2="36" y2="24" stroke="#52525b" stroke-width="2" stroke-linecap="round"/>
+  <line x1="22" y1="32" x2="34" y2="32" stroke="#52525b" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Fluffy Fox Tail -->
+  <path d="M38 44 Q48 38, 54 28 Q58 20, 56 12 Q54 8, 50 10 Q46 12, 48 18 Q50 24, 46 32 Q42 40, 38 44" 
+        fill="url(#tailGradient)"/>
+  <!-- Tail fluff details -->
+  <path d="M50 10 Q52 14, 50 18 Q48 14, 50 10" fill="#fdba74"/>
+  <path d="M54 16 Q55 20, 52 24 Q51 20, 54 16" fill="#fed7aa"/>
+  <path d="M48 26 Q50 30, 46 34 Q46 30, 48 26" fill="#fdba74"/>
+  <!-- Tail tip (white) -->
+  <ellipse cx="56" cy="11" rx="4" ry="3" fill="#fff7ed" transform="rotate(-30 56 11)"/>
+  
+  <defs>
+    <linearGradient id="tailGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="40%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fb923c"/>
+    </linearGradient>
+  </defs>
+</svg>

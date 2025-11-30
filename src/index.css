@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 24 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 24 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 24 100% 50%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  
+  .glass-dark {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5;
+  }
+  
+  /* Gradient backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600;
+  }
+  
+  .gradient-dark {
+    @apply bg-gradient-to-b from-zinc-900 via-zinc-950 to-black;
+  }
+  
+  .gradient-radial {
+    background: radial-gradient(ellipse at top, rgba(251, 146, 60, 0.15) 0%, transparent 50%);
+  }
+  
+  /* Text gradients */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500;
+  }
+  
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-xl hover:shadow-orange-500/10;
+  }
+  
+  .card-lift {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/50;
+  }
+  
+  /* Shimmer effect for loading */
+  .shimmer {
+    @apply relative overflow-hidden;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  
+  /* Fade animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Slide animations */
+  .slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Image zoom on hover */
+  .img-zoom {
+    @apply overflow-hidden;
+  }
+  
+  .img-zoom img {
+    @apply transition-transform duration-500 ease-out;
+  }
+  
+  .img-zoom:hover img {
+    @apply scale-110;
+  }
+  
+  /* Glow effects */
+  .glow {
+    @apply shadow-lg shadow-orange-500/25;
+  }
+  
+  .glow-sm {
+    box-shadow: 0 0 20px rgba(251, 146, 60, 0.15);
+  }
+  
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Custom scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3f46 transparent;
+  }
+  
+  /* Pulse animation */
+  .pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Reading progress bar */
+  .progress-bar {
+    @apply h-1 bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-150;
+  }
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3f3f46, #27272a);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #52525b, #3f3f46);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(251, 146, 60, 0.3);
+  color: white;
+}
+
+/* Focus styling */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Reader-specific styles */
+.reader-page img {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Double page spread */
+.double-page {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+.double-page img {
+  max-width: 50%;
+  height: auto;
+}
