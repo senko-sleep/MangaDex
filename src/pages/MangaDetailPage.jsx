@@ -5,6 +5,7 @@ import {
   Heart, Share2, BookMarked, Globe, Info
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
+import { getCoverUrl } from '../lib/imageUtils';
 
 // Language code to name mapping
 const LANGUAGES = {
@@ -139,7 +140,7 @@ export default function MangaDetailPage() {
       
       updateMeta('og:title', `${manga.title} - MangaFox`);
       updateMeta('og:description', manga.description?.slice(0, 200) || `Read ${manga.title} online`);
-      updateMeta('og:image', manga.cover || '');
+      updateMeta('og:image', getCoverUrl(manga) || '');
       updateMeta('og:type', 'article');
     }
     
@@ -217,9 +218,9 @@ export default function MangaDetailPage() {
       {/* Hero Background */}
       <div className="relative h-[45vh] md:h-[55vh] overflow-hidden">
         {/* Blurred Cover Background */}
-        {manga.cover && (
+        {getCoverUrl(manga) && (
           <img 
-            src={manga.cover} 
+            src={getCoverUrl(manga)} 
             alt="" 
             className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-40"
           />
@@ -263,9 +264,9 @@ export default function MangaDetailPage() {
           {/* Cover */}
           <div className="shrink-0 mx-auto md:mx-0">
             <div className="w-44 md:w-52 aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10">
-              {manga.cover ? (
+              {getCoverUrl(manga) ? (
                 <img 
-                  src={manga.cover} 
+                  src={getCoverUrl(manga)} 
                   alt={manga.title} 
                   className="w-full h-full object-cover"
                 />

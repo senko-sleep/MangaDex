@@ -5,9 +5,11 @@ import {
   BookOpen, Grid3X3, LayoutGrid
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
+import { getCoverUrl } from '../lib/imageUtils';
 
 // Manga Card Component
 function MangaCard({ manga, index }) {
+  const cover = getCoverUrl(manga);
   return (
     <Link 
       to={`/manga/${encodeURIComponent(manga.id)}`} 
@@ -16,9 +18,9 @@ function MangaCard({ manga, index }) {
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
         {/* Cover Image */}
-        {manga.cover ? (
+        {cover ? (
           <img 
-            src={manga.cover} 
+            src={cover} 
             alt="" 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
             loading="lazy" 
@@ -71,15 +73,16 @@ function MangaCard({ manga, index }) {
 
 // Featured Card for Hero Section
 function FeaturedCard({ manga }) {
+  const cover = getCoverUrl(manga);
   return (
     <Link 
       to={`/manga/${encodeURIComponent(manga.id)}`}
       className="relative flex-shrink-0 w-[260px] md:w-[300px] group"
     >
       <div className="relative h-[160px] md:h-[180px] rounded-2xl overflow-hidden card-hover">
-        {manga.cover ? (
+        {cover ? (
           <img 
-            src={manga.cover} 
+            src={cover} 
             alt="" 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />

@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
+import { getCoverUrl } from '../../lib/imageUtils';
 
 export default function MangaCard({ manga }) {
   const [imgError, setImgError] = useState(false);
   
   if (!manga) return null;
   
-  const cover = manga.coverUrl || manga.thumbnail || manga.cover;
+  const cover = getCoverUrl(manga);
   const showImg = cover && !imgError;
   
   return (
