@@ -1,7 +1,8 @@
 import BaseScraper from './base.js';
 
 // API base URL for proxy (set via environment variable in production)
-const API_BASE = process.env.API_BASE_URL || '';
+// Must be set to the full URL of the API server (e.g., https://mangadex-i6sv.onrender.com)
+const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
 
 // MangaDex - Official API, very reliable
 export class MangaDexScraper extends BaseScraper {
@@ -11,9 +12,10 @@ export class MangaDexScraper extends BaseScraper {
     this.tagCacheTime = 0;
   }
   
-  // Helper to create proxy URL
+  // Helper to create proxy URL - returns absolute URL for cross-origin access
   proxyUrl(url) {
-    return `${API_BASE}/api/proxy/image?url=${encodeURIComponent(url)}`;
+    const base = API_BASE || 'https://mangadex-i6sv.onrender.com';
+    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
   // Get tag IDs from tag names (for API filtering)
@@ -116,8 +118,8 @@ export class MangaDexScraper extends BaseScraper {
     const contentRating = m.attributes?.contentRating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
     
-    // Direct MangaDex cover URL
-    const coverUrl = cover ? `https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
+    // Proxy MangaDex cover URL for cross-origin access
+    const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg`) : null;
     
     return {
       id: `mangadex:${m.id}`,
@@ -159,8 +161,8 @@ export class MangaDexScraper extends BaseScraper {
       const altTitles = m.attributes?.altTitles || [];
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
       
-      // Direct MangaDex cover URL
-      const coverUrl = cover ? `https://uploads.mangadex.org/covers/${mangaId}/${cover}` : null;
+      // Proxy MangaDex cover URL for cross-origin access
+      const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${mangaId}/${cover}`) : null;
 
       return {
         id,

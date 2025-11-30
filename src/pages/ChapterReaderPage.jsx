@@ -7,7 +7,6 @@ import {
   Monitor, Smartphone, ArrowLeftRight, ChevronUp, ChevronDown, Eye
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
-import { getChapterPages as getMangaDexPages } from '../lib/mangadex';
 
 // Reading settings defaults
 const DEFAULT_SETTINGS = {
@@ -322,26 +321,19 @@ export default function ChapterReaderPage() {
     setCurrentPage(0);
     const mangaId = decodeURIComponent(id);
     
-    // Fetch pages directly from MangaDex API and chapters from backend
+    // Fetch pages and chapters from backend API (proxies MangaDex to handle CORS/hotlink)
     Promise.all([
-      getMangaDexPages(chapterId).catch(err => {
-        console.error('[Reader] MangaDex pages error:', err);
-        // Fallback to backend API if direct fails
-        return fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`))
-          .then(r => r.json())
-          .then(data => data.pages || []);
-      }),
+      fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`)).then(r => r.json()),
       fetch(apiUrl(`/api/chapters/${mangaId}`)).then(r => r.json())
-    ]).then(([pageData, c]) => {
-      // Handle both array format and {pages: []} format
-      const pages = Array.isArray(pageData) ? pageData : (pageData?.pages || []);
-      setPages(pages);
+    ]).then(([p, c]) => {
+      const pageData = p.pages || [];
+      setPages(pageData);
       setChapters(c.data || []);
       setLoading(false);
       window.scrollTo(0, 0);
       
       // Preload first few pages immediately
-      pages.slice(0, 5).forEach(page => {
+      pageData.slice(0, 5).forEach(page => {
         const img = new Image();
         img.src = page.url;
       });

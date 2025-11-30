@@ -6,37 +6,19 @@ const resolvedCoverCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Extracts and normalizes cover URL to use MangaDex CDN directly
- * Handles proxy URLs, wrong domains, etc.
+ * Normalizes cover URL - keeps proxy URLs as-is for cross-origin access
  */
 export function normalizeCoverUrl(url) {
   if (!url) return null;
   
-  // If it's a proxy URL, extract the original URL
+  // Keep proxy URLs as-is - they're already set up for cross-origin access
   if (url.includes('/api/proxy/image?url=')) {
-    try {
-      const match = url.match(/[?&]url=([^&]+)/);
-      if (match) {
-        url = decodeURIComponent(match[1]);
-      }
-    } catch (e) {
-      // Continue with original URL
-    }
+    return url;
   }
   
-  // Fix wrong domain: mangadex.org/covers -> uploads.mangadex.org/covers
+  // For direct MangaDex URLs, fix wrong domains
   if (url.includes('mangadex.org/covers/') && !url.includes('uploads.mangadex.org')) {
     url = url.replace('mangadex.org/covers/', 'uploads.mangadex.org/covers/');
-  }
-  
-  // Ensure it uses uploads.mangadex.org for covers
-  if (url.includes('/covers/') && !url.startsWith('https://uploads.mangadex.org')) {
-    // Extract manga ID and filename from URL
-    const match = url.match(/covers\/([a-f0-9-]+)\/([^?]+)/);
-    if (match) {
-      const [, mangaId, filename] = match;
-      url = `https://uploads.mangadex.org/covers/${mangaId}/${filename}`;
-    }
   }
   
   return url;
