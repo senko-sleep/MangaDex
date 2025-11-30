@@ -32,11 +32,20 @@ export default function ChapterReaderPage() {
 
   const fetchChapter = async () => {
     try {
-      const response = await fetch(`/api/manga/${params.id}/chapters/${params.chapterId}`);
+      // Fetch chapter with download=true to cache images locally
+      const response = await fetch(`/api/manga/${params.id}/chapters/${params.chapterId}?download=true`);
       const data = await response.json();
 
       if (data.success) {
-        setChapter(data.data);
+        // Transform API response to match expected format
+        setChapter({
+          id: data.data.chapterId,
+          chapterNumber: data.data.chapterId,
+          pageCount: data.data.pageCount,
+          pages: data.data.pages.map(p => ({
+            imageUrl: p.url
+          }))
+        });
       }
     } catch (error) {
       console.error('Error fetching chapter:', error);
