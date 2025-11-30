@@ -1,11 +1,19 @@
 import BaseScraper from './base.js';
 
+// API base URL for proxy (set via environment variable in production)
+const API_BASE = process.env.API_BASE_URL || '';
+
 // MangaDex - Official API, very reliable
 export class MangaDexScraper extends BaseScraper {
   constructor() {
     super('MangaDex', 'https://api.mangadex.org', false);
     this.tagCache = null;
     this.tagCacheTime = 0;
+  }
+  
+  // Helper to create proxy URL
+  proxyUrl(url) {
+    return `${API_BASE}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
   // Get tag IDs from tag names (for API filtering)
@@ -108,7 +116,7 @@ export class MangaDexScraper extends BaseScraper {
     const contentRating = m.attributes?.contentRating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
     
-    // Use proxy for cover images to bypass hotlink protection
+    // Direct MangaDex cover URL (works fine in browsers)
     const coverUrl = cover ? `https://mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
     
     return {
@@ -116,7 +124,7 @@ export class MangaDexScraper extends BaseScraper {
       sourceId: 'mangadex',
       slug: m.id,
       title: m.attributes?.title?.en || m.attributes?.title?.['ja-ro'] || Object.values(m.attributes?.title || {})[0] || 'Unknown',
-      cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+      cover: coverUrl,
       status: m.attributes?.status,
       contentRating,
       isAdult,
@@ -151,7 +159,7 @@ export class MangaDexScraper extends BaseScraper {
       const altTitles = m.attributes?.altTitles || [];
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
       
-      // Proxy cover image
+      // Direct MangaDex cover URL
       const coverUrl = cover ? `https://mangadex.org/covers/${mangaId}/${cover}` : null;
 
       return {
@@ -161,7 +169,7 @@ export class MangaDexScraper extends BaseScraper {
         title,
         altTitles: altTitles.map(t => Object.values(t)[0]).filter(Boolean),
         description,
-        cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+        cover: coverUrl,
         status: m.attributes?.status,
         contentRating,
         isAdult,
@@ -325,7 +333,7 @@ export class MangaDexScraper extends BaseScraper {
         const originalUrl = `${baseUrl}/data/${hash}/${file}`;
         return {
           page: i + 1,
-          url: `/api/proxy/image?url=${encodeURIComponent(originalUrl)}`,
+          url: this.proxyUrl(originalUrl),
           originalUrl,
           quality: 'high',
           isExternal: false,
@@ -337,7 +345,7 @@ export class MangaDexScraper extends BaseScraper {
         const originalUrl = `${baseUrl}/data-saver/${hash}/${file}`;
         return {
           page: i + 1,
-          url: `/api/proxy/image?url=${encodeURIComponent(originalUrl)}`,
+          url: this.proxyUrl(originalUrl),
           originalUrl,
           quality: 'low',
         };
