@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Search, BookOpen, Play, ChevronDown, SortAsc, SortDesc,
-  Heart, Share2, BookMarked, Globe, Info
+  Heart, Share2, BookMarked, Globe, Info, ArrowLeft
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
-import { getCoverUrl } from '../lib/imageUtils';
+import { getCoverUrl, getAnilistCoverUrl, PLACEHOLDER_COVER } from '../lib/imageUtils';
 
 // Language code to name mapping
 const LANGUAGES = {
@@ -94,6 +94,7 @@ export default function MangaDetailPage() {
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' (oldest first) or 'desc'
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [langFilter, setLangFilter] = useState('en'); // Default to English
+  const [coverUrl, setCoverUrl] = useState(null);
 
   useEffect(() => {
     const mangaId = decodeURIComponent(id);
@@ -122,6 +123,24 @@ export default function MangaDetailPage() {
     });
   }, [id]);
 
+  // Fetch cover from Anilist if MangaDex cover is missing
+  useEffect(() => {
+    if (!manga) return;
+    
+    const syncCover = getCoverUrl(manga);
+    if (syncCover) {
+      setCoverUrl(syncCover);
+      return;
+    }
+    
+    // Fetch from Anilist
+    getAnilistCoverUrl(manga).then(url => {
+      setCoverUrl(url);
+    }).catch(() => {
+      setCoverUrl(PLACEHOLDER_COVER);
+    });
+  }, [manga]);
+
   // Update document title and meta for SEO/embeds
   useEffect(() => {
     if (manga) {
@@ -140,14 +159,14 @@ export default function MangaDetailPage() {
       
       updateMeta('og:title', `${manga.title} - MangaFox`);
       updateMeta('og:description', manga.description?.slice(0, 200) || `Read ${manga.title} online`);
-      updateMeta('og:image', getCoverUrl(manga) || '');
+      updateMeta('og:image', coverUrl || '');
       updateMeta('og:type', 'article');
     }
     
     return () => {
       document.title = 'MangaFox - Read Manga Online';
     };
-  }, [manga]);
+  }, [manga, coverUrl]);
 
   // Get available languages
   const availableLanguages = useMemo(() => {
@@ -218,9 +237,9 @@ export default function MangaDetailPage() {
       {/* Hero Background */}
       <div className="relative h-[45vh] md:h-[55vh] overflow-hidden">
         {/* Blurred Cover Background */}
-        {getCoverUrl(manga) && (
+        {coverUrl && (
           <img 
-            src={getCoverUrl(manga)} 
+            src={coverUrl} 
             alt="" 
             className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-40"
           />
@@ -264,11 +283,15 @@ export default function MangaDetailPage() {
           {/* Cover */}
           <div className="shrink-0 mx-auto md:mx-0">
             <div className="w-44 md:w-52 aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10">
-              {getCoverUrl(manga) ? (
+              {coverUrl ? (
                 <img 
-                  src={getCoverUrl(manga)} 
+                  src={coverUrl} 
                   alt={manga.title} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    setCoverUrl(PLACEHOLDER_COVER);
+                  }}
                 />
               ) : (
                 <div className="w-full h-full bg-zinc-800 flex items-center justify-center">

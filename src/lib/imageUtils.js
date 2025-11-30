@@ -1,16 +1,27 @@
-// Utility to proxy cover URLs through our backend to bypass hotlink protection
+// Utility for manga cover images with Anilist API and placeholders
+import { getAnilistCover, PLACEHOLDER_COVER } from './anilist';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+// Cache for resolved cover URLs
+const resolvedCoverCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Wraps a MangaDex image URL in our proxy to bypass hotlink protection
+ * Extracts and normalizes cover URL to use MangaDex CDN directly
+ * Handles proxy URLs, wrong domains, etc.
  */
 export function normalizeCoverUrl(url) {
   if (!url) return null;
   
-  // Already proxied
+  // If it's a proxy URL, extract the original URL
   if (url.includes('/api/proxy/image?url=')) {
-    return url;
+    try {
+      const match = url.match(/[?&]url=([^&]+)/);
+      if (match) {
+        url = decodeURIComponent(match[1]);
+      }
+    } catch (e) {
+      // Continue with original URL
+    }
   }
   
   // Fix wrong domain: mangadex.org/covers -> uploads.mangadex.org/covers
@@ -20,6 +31,7 @@ export function normalizeCoverUrl(url) {
   
   // Ensure it uses uploads.mangadex.org for covers
   if (url.includes('/covers/') && !url.startsWith('https://uploads.mangadex.org')) {
+    // Extract manga ID and filename from URL
     const match = url.match(/covers\/([a-f0-9-]+)\/([^?]+)/);
     if (match) {
       const [, mangaId, filename] = match;
@@ -27,18 +39,76 @@ export function normalizeCoverUrl(url) {
     }
   }
   
-  // Proxy all MangaDex CDN URLs to bypass hotlink protection
-  if (url.includes('mangadex.org') || url.includes('cmdxd98sb0x3yprd.mangadex.network')) {
-    return `${API_BASE}/api/proxy/image?url=${encodeURIComponent(url)}`;
-  }
-  
   return url;
 }
 
 /**
- * Get cover URL with fallback
+ * Get cover URL with fallback to existing sources
  */
 export function getCoverUrl(manga) {
   const url = manga?.coverUrl || manga?.thumbnail || manga?.cover;
   return normalizeCoverUrl(url);
 }
+
+/**
+ * Get cover URL using Anilist API with fallback to MangaDex and placeholder
+ * This is an async function that fetches from Anilist if no cover is available
+ * @param {Object} manga - Manga object with title and optional coverUrl
+ * @returns {Promise<string>} Cover URL or placeholder
+ */
+export async function getAnilistCoverUrl(manga) {
+  if (!manga) return PLACEHOLDER_COVER;
+  
+  const title = manga.title || '';
+  const cacheKey = manga.id || title;
+  
+  // Check cache first
+  const cached = resolvedCoverCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.url;
+  }
+  
+  // Try existing MangaDex cover first
+  const existingCover = getCoverUrl(manga);
+  if (existingCover) {
+    resolvedCoverCache.set(cacheKey, { url: existingCover, timestamp: Date.now() });
+    return existingCover;
+  }
+  
+  // Try Anilist API
+  if (title) {
+    try {
+      const anilistResult = await getAnilistCover(title);
+      if (anilistResult?.coverUrl) {
+        resolvedCoverCache.set(cacheKey, { url: anilistResult.coverUrl, timestamp: Date.now() });
+        return anilistResult.coverUrl;
+      }
+    } catch (error) {
+      console.warn('[ImageUtils] Anilist fetch failed:', error.message);
+    }
+  }
+  
+  // Return placeholder if nothing found
+  resolvedCoverCache.set(cacheKey, { url: PLACEHOLDER_COVER, timestamp: Date.now() });
+  return PLACEHOLDER_COVER;
+}
+
+/**
+ * Get banner image from Anilist (for hero backgrounds)
+ * @param {Object} manga - Manga object with title
+ * @returns {Promise<string|null>} Banner URL or null
+ */
+export async function getAnilistBannerUrl(manga) {
+  if (!manga?.title) return null;
+  
+  try {
+    const result = await getAnilistCover(manga.title);
+    return result?.bannerUrl || null;
+  } catch (error) {
+    console.warn('[ImageUtils] Anilist banner fetch failed:', error.message);
+    return null;
+  }
+}
+
+// Export placeholder for components that need it directly
+export { PLACEHOLDER_COVER };
