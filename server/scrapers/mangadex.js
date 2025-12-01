@@ -116,6 +116,56 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
+  async getNewlyAdded(page = 1, includeAdult = true) {
+    try {
+      const offset = (page - 1) * 24;
+      const params = new URLSearchParams();
+      params.append('limit', '24');
+      params.append('offset', String(offset));
+      params.append('includes[]', 'cover_art');
+      params.append('order[createdAt]', 'desc');
+      params.append('hasAvailableChapters', 'true');
+      
+      params.append('contentRating[]', 'safe');
+      params.append('contentRating[]', 'suggestive');
+      if (includeAdult) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      }
+
+      const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
+      return (res.data?.data || []).map(m => this.formatManga(m));
+    } catch (e) {
+      console.error('[MangaDex] NewlyAdded error:', e.message);
+      return [];
+    }
+  }
+
+  async getTopRated(page = 1, includeAdult = true) {
+    try {
+      const offset = (page - 1) * 24;
+      const params = new URLSearchParams();
+      params.append('limit', '24');
+      params.append('offset', String(offset));
+      params.append('includes[]', 'cover_art');
+      params.append('order[rating]', 'desc');
+      params.append('hasAvailableChapters', 'true');
+      
+      params.append('contentRating[]', 'safe');
+      params.append('contentRating[]', 'suggestive');
+      if (includeAdult) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      }
+
+      const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
+      return (res.data?.data || []).map(m => this.formatManga(m));
+    } catch (e) {
+      console.error('[MangaDex] TopRated error:', e.message);
+      return [];
+    }
+  }
+
   formatManga(m) {
     const cover = m.relationships?.find(r => r.type === 'cover_art')?.attributes?.fileName;
     const tags = m.attributes?.tags || [];

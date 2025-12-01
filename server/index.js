@@ -29,6 +29,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Get appropriate referer for image URL
+function getRefererForUrl(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    if (hostname.includes('nhentai')) return 'https://nhentai.net/';
+    if (hostname.includes('e-hentai') || hostname.includes('hath.network')) return 'https://e-hentai.org/';
+    if (hostname.includes('imhentai')) return 'https://imhentai.xxx/';
+    if (hostname.includes('hitomi')) return 'https://hitomi.la/';
+    if (hostname.includes('mangadex')) return 'https://mangadex.org/';
+    if (hostname.includes('mangakakalot') || hostname.includes('manganato')) return 'https://manganato.com/';
+    if (hostname.includes('mangasee')) return 'https://mangasee123.com/';
+    // Default: use the origin of the image URL itself
+    return new URL(url).origin + '/';
+  } catch {
+    return 'https://mangadex.org/';
+  }
+}
+
 // Image proxy endpoint - bypasses hotlink protection
 app.get('/api/proxy/image', async (req, res) => {
   const imageUrl = req.query.url;
@@ -51,11 +69,15 @@ app.get('/api/proxy/image', async (req, res) => {
       return res.send(cached.data);
     }
 
+    // Get the appropriate referer for this image source
+    const referer = getRefererForUrl(imageUrl);
+
     // Fetch with proper headers to bypass hotlink protection
     const response = await fetch(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://mangadex.org/',
+        'Referer': referer,
+        'Origin': referer.replace(/\/$/, ''),
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       },
@@ -97,9 +119,32 @@ app.get('/api/proxy/image', async (req, res) => {
 // Get available sources
 app.get('/api/sources', (req, res) => {
   const includeAdult = req.query.adult === 'true';
+  const allSources = scrapers.getSources(includeAdult);
+  
+  // Build content types list from sources
+  const contentTypeSet = new Set();
+  allSources.forEach(s => {
+    (s.contentTypes || ['manga']).forEach(t => contentTypeSet.add(t));
+  });
+  
+  const contentTypes = [
+    { id: 'manga', name: 'Manga', description: 'Japanese comics' },
+    { id: 'manhwa', name: 'Manhwa', description: 'Korean comics' },
+    { id: 'manhua', name: 'Manhua', description: 'Chinese comics' },
+    { id: 'doujinshi', name: 'Doujinshi', description: 'Fan-made/indie works' },
+    { id: 'artistcg', name: 'Artist CG', description: 'Artist illustrations/CG sets' },
+    { id: 'gamecg', name: 'Game CG', description: 'Game CG/illustrations' },
+    { id: 'western', name: 'Western', description: 'Western comics/art' },
+    { id: 'imageset', name: 'Image Set', description: 'Image collections' },
+    { id: 'cosplay', name: 'Cosplay', description: 'Cosplay photo sets' },
+    { id: 'comic', name: 'Comic', description: 'General comics' },
+    { id: 'oneshot', name: 'One-shot', description: 'Single chapter works' },
+  ].filter(t => contentTypeSet.has(t.id));
+  
   res.json({
-    sources: scrapers.getSources(includeAdult),
+    sources: allSources,
     enabled: scrapers.getEnabledSources(includeAdult).map(s => s.id),
+    contentTypes,
   });
 });
 
@@ -209,6 +254,38 @@ app.get('/api/manga/latest', async (req, res) => {
     res.json({ data });
   } catch (e) {
     console.error('Latest error:', e);
+    res.json({ data: [] });
+  }
+});
+
+// Get newly added manga
+app.get('/api/manga/new', async (req, res) => {
+  try {
+    const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
+    const data = await scrapers.getNewlyAdded({
+      sourceIds: sourceIds ? sourceIds.split(',') : null,
+      includeAdult: adult === 'true',
+      page: parseInt(page, 10),
+    });
+    res.json({ data });
+  } catch (e) {
+    console.error('NewlyAdded error:', e);
+    res.json({ data: [] });
+  }
+});
+
+// Get top rated manga
+app.get('/api/manga/top-rated', async (req, res) => {
+  try {
+    const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
+    const data = await scrapers.getTopRated({
+      sourceIds: sourceIds ? sourceIds.split(',') : null,
+      includeAdult: adult === 'true',
+      page: parseInt(page, 10),
+    });
+    res.json({ data });
+  } catch (e) {
+    console.error('TopRated error:', e);
     res.json({ data: [] });
   }
 });

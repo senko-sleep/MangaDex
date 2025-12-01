@@ -1,16 +1,25 @@
 import NodeCache from 'node-cache';
 import MangaDexScraper from './mangadex.js';
+import NHentaiScraper from './nhentai.js';
+import { EHentaiScraper } from './ehentai.js';
+import { IMHentaiScraper } from './imhentai.js';
 
 // Cache results for 5 minutes
 const cache = new NodeCache({ stdTTL: 300 });
 
-// Initialize scrapers - only MangaDex is reliable
+// Initialize scrapers - only working ones
 const scrapers = {
+  // Mainstream manga sources (MangaDex API is reliable)
   mangadex: new MangaDexScraper(),
+  // Adult content sources (using direct APIs)
+  nhentai: new NHentaiScraper(),
+  ehentai: new EHentaiScraper(),
+  imhentai: new IMHentaiScraper(),
 };
 
-// Source metadata
+// Source metadata with content types
 export const sources = {
+  // Mainstream manga sources
   mangadex: {
     id: 'mangadex',
     name: 'MangaDex',
@@ -18,6 +27,35 @@ export const sources = {
     isAdult: false,
     enabled: true,
     description: 'Official API, reliable',
+    contentTypes: ['manga', 'manhwa', 'manhua', 'oneshot'],
+  },
+  // Adult content sources
+  nhentai: {
+    id: 'nhentai',
+    name: 'nhentai',
+    icon: '🔞',
+    isAdult: true,
+    enabled: true,
+    description: 'Doujinshi library (API)',
+    contentTypes: ['doujinshi', 'manga'],
+  },
+  ehentai: {
+    id: 'ehentai',
+    name: 'E-Hentai',
+    icon: '🐼',
+    isAdult: true,
+    enabled: true,
+    description: 'Largest doujinshi archive',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset', 'cosplay'],
+  },
+  imhentai: {
+    id: 'imhentai',
+    name: 'IMHentai',
+    icon: '🎨',
+    isAdult: true,
+    enabled: true,
+    description: 'Large adult content library',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset'],
   },
 };
 
@@ -149,6 +187,72 @@ export async function getLatest(options = {}) {
   return allResults;
 }
 
+// Get newly added manga
+export async function getNewlyAdded(options = {}) {
+  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+
+  const cacheKey = `newlyAdded:${JSON.stringify(options)}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const targetSources = sourceIds 
+    ? sourceIds.filter(id => scrapers[id])
+    : getEnabledSources(includeAdult).map(s => s.id);
+
+  const results = await Promise.allSettled(
+    targetSources.map(async (sourceId) => {
+      try {
+        const scraper = scrapers[sourceId];
+        const data = await scraper.getNewlyAdded(page, includeAdult);
+        return data.map(m => ({ ...m, sourceId }));
+      } catch (e) {
+        console.error(`[${sourceId}] NewlyAdded error:`, e.message);
+        return [];
+      }
+    })
+  );
+
+  const allResults = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value);
+
+  cache.set(cacheKey, allResults);
+  return allResults;
+}
+
+// Get top rated manga
+export async function getTopRated(options = {}) {
+  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+
+  const cacheKey = `topRated:${JSON.stringify(options)}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const targetSources = sourceIds 
+    ? sourceIds.filter(id => scrapers[id])
+    : getEnabledSources(includeAdult).map(s => s.id);
+
+  const results = await Promise.allSettled(
+    targetSources.map(async (sourceId) => {
+      try {
+        const scraper = scrapers[sourceId];
+        const data = await scraper.getTopRated(page, includeAdult);
+        return data.map(m => ({ ...m, sourceId }));
+      } catch (e) {
+        console.error(`[${sourceId}] TopRated error:`, e.message);
+        return [];
+      }
+    })
+  );
+
+  const allResults = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value);
+
+  cache.set(cacheKey, allResults);
+  return allResults;
+}
+
 // Get manga details
 export async function getMangaDetails(id) {
   const cacheKey = `manga:${id}`;
@@ -250,6 +354,8 @@ export default {
   search,
   getPopular,
   getLatest,
+  getNewlyAdded,
+  getTopRated,
   getMangaDetails,
   getChapters,
   getChapterPages,

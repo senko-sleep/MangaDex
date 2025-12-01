@@ -6,50 +6,7 @@ import {
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 import { getCoverUrl, getAnilistCoverUrl, PLACEHOLDER_COVER } from '../lib/imageUtils';
-
-// Language code to name and flag mapping
-const LANGUAGES = {
-  en: '🇬🇧 English',
-  ja: '🇯🇵 Japanese', 
-  ko: '🇰🇷 Korean', 
-  zh: '🇨🇳 Chinese', 
-  'zh-hk': '🇭🇰 Chinese (HK)',
-  'zh-ro': '🇨🇳 Chinese (Romanized)',
-  es: '🇪🇸 Spanish', 
-  'es-la': '🇲🇽 Spanish (LATAM)',
-  fr: '🇫🇷 French', 
-  de: '🇩🇪 German', 
-  it: '🇮🇹 Italian', 
-  pt: '🇵🇹 Portuguese', 
-  'pt-br': '🇧🇷 Portuguese (BR)',
-  ru: '🇷🇺 Russian', 
-  pl: '🇵🇱 Polish', 
-  vi: '🇻🇳 Vietnamese', 
-  th: '🇹🇭 Thai', 
-  id: '🇮🇩 Indonesian', 
-  ar: '🇸🇦 Arabic',
-  tr: '🇹🇷 Turkish', 
-  nl: '🇳🇱 Dutch', 
-  sv: '🇸🇪 Swedish', 
-  fil: '🇵🇭 Filipino', 
-  ms: '🇲🇾 Malay', 
-  hi: '🇮🇳 Hindi',
-  uk: '🇺🇦 Ukrainian',
-  cs: '🇨🇿 Czech',
-  hu: '🇭🇺 Hungarian',
-  ro: '🇷🇴 Romanian',
-  bg: '🇧🇬 Bulgarian',
-  he: '🇮🇱 Hebrew',
-  fa: '🇮🇷 Persian',
-  bn: '🇧🇩 Bengali',
-  my: '🇲🇲 Burmese',
-  mn: '🇲🇳 Mongolian',
-  lt: '🌐 Lithuanian',
-  el: '🇬🇷 Greek',
-  da: '🇩🇰 Danish',
-  fi: '🇫🇮 Finnish',
-  no: '🇳🇴 Norwegian',
-};
+import { LANGUAGES, getLanguageDisplay } from '../lib/languages';
 
 // Save detail page scroll position before navigating to chapter
 const saveDetailScrollPosition = (mangaId) => {
@@ -71,7 +28,7 @@ const clearDetailScrollPosition = (mangaId) => {
 };
 
 // Compact Chapter Row Component
-function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate }) {
+function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }) {
   const timeAgo = (date) => {
     if (!date) return '';
     const now = new Date();
@@ -89,7 +46,7 @@ function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate }) {
   return (
     <Link
       to={`/manga/${mangaId}/${chapter.id}`}
-      state={{ isLongStrip }}
+      state={{ isLongStrip, preferredLang }}
       className="group flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors"
       onClick={onNavigate}
     >
@@ -320,8 +277,10 @@ export default function MangaDetailPage() {
   const genres = manga.genres || manga.tags?.filter(t => t.group === 'genre').map(t => t.name) || [];
   const tags = manga.tags?.filter(t => typeof t === 'string') || [];
   const sourceId = manga.sourceId || manga.id?.split(':')[0];
-  const firstChapter = chapters[chapters.length - 1];
-  const latestChapter = chapters[0];
+  
+  // Use filtered chapters for Start/Latest buttons to respect language filter
+  const firstChapter = filteredChapters[filteredChapters.length - 1];
+  const latestChapter = filteredChapters[0];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -396,7 +355,7 @@ export default function MangaDetailPage() {
               {firstChapter && (
                 <Link
                   to={`/manga/${id}/${firstChapter.id}`}
-                  state={{ isLongStrip: manga.isLongStrip }}
+                  state={{ isLongStrip: manga.isLongStrip, preferredLang: langFilter }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-semibold transition-colors shadow-lg shadow-orange-500/25"
                   onClick={handleChapterNavigate}
                 >
@@ -407,7 +366,7 @@ export default function MangaDetailPage() {
               {latestChapter && latestChapter !== firstChapter && (
                 <Link
                   to={`/manga/${id}/${latestChapter.id}`}
-                  state={{ isLongStrip: manga.isLongStrip }}
+                  state={{ isLongStrip: manga.isLongStrip, preferredLang: langFilter }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
                   onClick={handleChapterNavigate}
                 >
@@ -521,7 +480,7 @@ export default function MangaDetailPage() {
                         key={lang}
                         className="px-2 py-1 text-xs bg-zinc-800 text-zinc-400 rounded-md"
                       >
-                        {LANGUAGES[lang] || lang.toUpperCase()}
+                        {LANGUAGES[lang] || getLanguageDisplay(lang)}
                       </span>
                     ))}
                 </div>
@@ -587,7 +546,7 @@ export default function MangaDetailPage() {
                     <option value="all">All Languages</option>
                     {availableLanguages.map(lang => (
                       <option key={lang} value={lang}>
-                        {LANGUAGES[lang] || lang.toUpperCase()}
+                        {LANGUAGES[lang] || getLanguageDisplay(lang)}
                       </option>
                     ))}
                   </select>
@@ -645,6 +604,7 @@ export default function MangaDetailPage() {
                       mangaId={id} 
                       isLongStrip={manga.isLongStrip}
                       onNavigate={handleChapterNavigate}
+                      preferredLang={langFilter}
                     />
                   ))}
                 </div>

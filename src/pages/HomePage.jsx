@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, X, Eye, EyeOff, Sparkles, TrendingUp,
   BookOpen, Grid3X3, LayoutGrid, Shield, ShieldOff, ShieldAlert,
-  Clock, CheckCircle2, Loader2, Filter, ChevronDown, ArrowUpDown
+  Clock, CheckCircle2, Loader2, Filter, ChevronDown, ArrowUpDown,
+  Plus, Star, RefreshCw, Layers, Database, ImageIcon, Gamepad2,
+  Globe, Palette, Camera, Book
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 import { getCoverUrl } from '../lib/imageUtils';
@@ -102,8 +104,8 @@ function MangaCard({ manga, index, onNavigate }) {
   );
 }
 
-// Featured Card for Hero Section
-function FeaturedCard({ manga, onNavigate }) {
+// Section Card for horizontal scrolling sections
+function SectionCard({ manga, onNavigate }) {
   const cover = getCoverUrl(manga);
   return (
     <Link 
@@ -155,7 +157,9 @@ export default function HomePage() {
   const shouldSkipInitialFetch = useRef(!!savedState?.manga?.length);
   
   const [manga, setManga] = useState(savedState?.manga || []);
-  const [featured, setFeatured] = useState(savedState?.featured || []);
+  const [newManga, setNewManga] = useState([]);
+  const [recentlyUpdated, setRecentlyUpdated] = useState([]);
+  const [sectionsLoading, setSectionsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(!savedState?.manga?.length);
   const [query, setQuery] = useState(savedState?.search || '');
@@ -166,6 +170,9 @@ export default function HomePage() {
   // Sources & Filters - initialize from saved state if available
   const [sources, setSources] = useState([]);
   const [enabledSources, setEnabledSources] = useState([]);
+  const [selectedSources, setSelectedSources] = useState(savedState?.selectedSources || []);
+  const [contentTypes, setContentTypes] = useState([]);
+  const [contentType, setContentType] = useState(savedState?.contentType || 'all');
   const [contentRating, setContentRating] = useState(savedState?.contentRating || 'safe');
   const [showAdult, setShowAdult] = useState(savedState?.showAdult || false);
   const [statusFilter, setStatusFilter] = useState(savedState?.statusFilter || 'all');
@@ -176,16 +183,19 @@ export default function HomePage() {
   const [excludedTags, setExcludedTags] = useState(savedState?.excludedTags || []);
   const [showFilters, setShowFilters] = useState(false);
   const [gridSize, setGridSize] = useState(savedState?.gridSize || 'normal');
-  const [expandedSection, setExpandedSection] = useState('tags');
+  const [expandedSection, setExpandedSection] = useState('type');
   
   const loader = useRef(null);
-  const featuredRef = useRef(null);
+  const newMangaRef = useRef(null);
+  const recentlyUpdatedRef = useRef(null);
   
   // Function to save current state before navigating
   const handleNavigateToManga = useCallback(() => {
     saveHomeState({
       search,
       contentRating,
+      contentType,
+      selectedSources,
       showAdult,
       statusFilter,
       sortBy,
@@ -193,17 +203,43 @@ export default function HomePage() {
       excludedTags,
       gridSize,
       manga,
-      featured,
       page,
       hasMore,
     });
-  }, [search, contentRating, showAdult, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, featured, page, hasMore]);
+  }, [search, contentRating, contentType, selectedSources, showAdult, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, page, hasMore]);
+
+  // Fetch homepage sections (new manga, recently updated)
+  useEffect(() => {
+    const fetchSections = async () => {
+      setSectionsLoading(true);
+      try {
+        const [newRes, latestRes] = await Promise.all([
+          fetch(apiUrl('/api/manga/new?adult=false')),
+          fetch(apiUrl('/api/manga/latest?adult=false'))
+        ]);
+        
+        const [newData, latestData] = await Promise.all([
+          newRes.json(),
+          latestRes.json()
+        ]);
+        
+        setNewManga((newData.data || []).slice(0, 12));
+        setRecentlyUpdated((latestData.data || []).slice(0, 12));
+      } catch (e) {
+        console.error('[MangaFox] Error fetching sections:', e);
+      }
+      setSectionsLoading(false);
+    };
+    
+    fetchSections();
+  }, []);
 
   // Load sources and tags on mount
   useEffect(() => {
     fetch(apiUrl(`/api/sources?adult=${showAdult}`)).then(r => r.json()).then(d => {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
+      setContentTypes(d.contentTypes || []);
     }).catch(() => {});
     fetch(apiUrl(`/api/tags?adult=${showAdult}`)).then(r => r.json()).then(d => {
       setAllTags(d.tags || []);
@@ -228,6 +264,16 @@ export default function HomePage() {
       params.set('adult', 'true');
     }
     
+    // Content type filter (manga, doujinshi, artistcg, etc.)
+    if (contentType && contentType !== 'all') {
+      params.set('type', contentType);
+    }
+    
+    // Source filter
+    if (selectedSources.length > 0) {
+      params.set('sources', selectedSources.join(','));
+    }
+    
     // Status filter
     if (statusFilter !== 'all') {
       params.set('status', statusFilter);
@@ -243,7 +289,7 @@ export default function HomePage() {
     if (excludedTags.length) params.set('exclude', excludedTags.join(','));
     
     return apiUrl(`/api/manga/search?${params}`);
-  }, [search, selectedTags, excludedTags, contentRating, statusFilter, sortBy]);
+  }, [search, selectedTags, excludedTags, contentRating, contentType, selectedSources, statusFilter, sortBy]);
 
   const fetchManga = useCallback(async (reset = false) => {
     if (loading) return;
@@ -271,9 +317,6 @@ export default function HomePage() {
       }
       
       setManga(prev => reset ? data : [...prev, ...data]);
-      if (reset && data.length > 0) {
-        setFeatured(data.slice(0, 6));
-      }
       setPage(p + 1);
       setHasMore(data.length >= 20);
       setInitialLoad(false);
@@ -301,12 +344,12 @@ export default function HomePage() {
       shouldSkipInitialFetch.current = false;
     }
     
-    console.log('[MangaFox] Filters changed:', { search, contentRating, statusFilter, sortBy, selectedTags, excludedTags });
+    console.log('[MangaFox] Filters changed:', { search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags });
     setManga([]);
     setPage(1);
     setHasMore(true);
     fetchManga(true);
-  }, [search, contentRating, statusFilter, sortBy, selectedTags, excludedTags]);
+  }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
   // Infinite scroll
   useEffect(() => {
@@ -365,14 +408,25 @@ export default function HomePage() {
     setSelectedTags([]);
     setExcludedTags([]);
     setContentRating('safe');
+    setContentType('all');
+    setSelectedSources([]);
     setStatusFilter('all');
     setSortBy('popular');
     setShowAdult(false);
   };
 
+  // Toggle source selection
+  const toggleSource = (sourceId) => {
+    setSelectedSources(prev => 
+      prev.includes(sourceId) 
+        ? prev.filter(s => s !== sourceId) 
+        : [...prev, sourceId]
+    );
+  };
+
   // Check if any filters are active (non-default values)
-  const hasFilters = selectedTags.length > 0 || excludedTags.length > 0;
-  const hasAdvancedFilters = contentRating !== 'safe' || statusFilter !== 'all' || sortBy !== 'popular';
+  const hasFilters = selectedTags.length > 0 || excludedTags.length > 0 || selectedSources.length > 0;
+  const hasAdvancedFilters = contentRating !== 'safe' || statusFilter !== 'all' || sortBy !== 'popular' || contentType !== 'all';
   const isInBrowserMode = search || hasFilters || hasAdvancedFilters;
 
   const gridCols = {
@@ -616,13 +670,175 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {/* Content Type & Sources Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                {/* Content Type Filter */}
+                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers className="w-4 h-4 text-cyan-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Type</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setContentType('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'all' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setContentType('manga')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'manga' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Book className="w-3 h-3" />
+                      Manga
+                    </button>
+                    <button
+                      onClick={() => setContentType('doujinshi')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'doujinshi' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <BookOpen className="w-3 h-3" />
+                      Doujinshi
+                    </button>
+                    <button
+                      onClick={() => setContentType('artistcg')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'artistcg' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Palette className="w-3 h-3" />
+                      Artist CG
+                    </button>
+                    <button
+                      onClick={() => setContentType('gamecg')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'gamecg' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Gamepad2 className="w-3 h-3" />
+                      Game CG
+                    </button>
+                    <button
+                      onClick={() => setContentType('imageset')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'imageset' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <ImageIcon className="w-3 h-3" />
+                      Image Set
+                    </button>
+                    <button
+                      onClick={() => setContentType('western')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'western' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Globe className="w-3 h-3" />
+                      Western
+                    </button>
+                    <button
+                      onClick={() => setContentType('cosplay')}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        contentType === 'cosplay' 
+                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Camera className="w-3 h-3" />
+                      Cosplay
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sources Filter */}
+                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Database className="w-4 h-4 text-pink-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sources</span>
+                    {selectedSources.length > 0 && (
+                      <span className="text-xs text-pink-400">({selectedSources.length} selected)</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {sources.length > 0 ? (
+                      sources.map(source => (
+                        <button
+                          key={source.id}
+                          onClick={() => toggleSource(source.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedSources.includes(source.id)
+                              ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/25'
+                              : source.adult 
+                                ? 'bg-red-950/50 text-red-300/70 hover:text-red-200 hover:bg-red-900/50 border border-red-900/30'
+                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+                          title={source.adult ? '18+ Source' : 'Safe Source'}
+                        >
+                          {source.name}
+                        </button>
+                      ))
+                    ) : (
+                      <span className="text-xs text-zinc-500">Loading sources...</span>
+                    )}
+                  </div>
+                  {selectedSources.length > 0 && (
+                    <button
+                      onClick={() => setSelectedSources([])}
+                      className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      Clear source selection
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Active Filters Display */}
-              {(selectedTags.length > 0 || excludedTags.length > 0) && (
+              {(selectedTags.length > 0 || excludedTags.length > 0 || selectedSources.length > 0 || contentType !== 'all') && (
                 <div className="mb-4 p-3 bg-zinc-900/30 rounded-xl border border-zinc-800/50">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-medium text-zinc-400">Active Filters:</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {/* Content Type Badge */}
+                    {contentType !== 'all' && (
+                      <span className="px-2.5 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg flex items-center gap-1.5 border border-cyan-500/30">
+                        <Layers className="w-3 h-3" />{contentType}
+                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => setContentType('all')} />
+                      </span>
+                    )}
+                    {/* Source Badges */}
+                    {selectedSources.map(sourceId => {
+                      const source = sources.find(s => s.id === sourceId);
+                      return (
+                        <span 
+                          key={sourceId} 
+                          className="px-2.5 py-1 text-xs bg-pink-500/20 text-pink-400 rounded-lg flex items-center gap-1.5 border border-pink-500/30"
+                        >
+                          <Database className="w-3 h-3" />{source?.name || sourceId}
+                          <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleSource(sourceId)} />
+                        </span>
+                      );
+                    })}
+                    {/* Tag Badges */}
                     {selectedTags.map(tag => (
                       <span 
                         key={tag} 
@@ -751,26 +967,64 @@ export default function HomePage() {
       </header>
 
       <main className="relative">
-        {/* Featured Section - Only show when NOT in browser mode */}
-        {!isInBrowserMode && featured.length > 0 && (
-          <section className="py-6 border-b border-zinc-900">
-            <div className="max-w-7xl mx-auto px-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-orange-500" />
-                  <h2 className="text-lg font-bold">Featured</h2>
+        {/* Homepage Sections - Only show when NOT in browser mode */}
+        {!isInBrowserMode && (
+          <>
+            {/* New Manga Section */}
+            {(sectionsLoading || newManga.length > 0) && (
+              <section className="py-6 border-b border-zinc-900">
+                <div className="max-w-7xl mx-auto px-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Plus className="w-5 h-5 text-emerald-500" />
+                      <h2 className="text-lg font-bold">New Manga</h2>
+                    </div>
+                  </div>
+                  {sectionsLoading ? (
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex-shrink-0 w-[260px] md:w-[300px] h-[160px] md:h-[180px] rounded-2xl bg-zinc-900 shimmer" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div ref={newMangaRef} className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                      {newManga.map((m) => (
+                        <SectionCard key={m.id} manga={m} onNavigate={handleNavigateToManga} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <div 
-                ref={featuredRef}
-                className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide"
-              >
-                {featured.map((m) => (
-                  <FeaturedCard key={m.id} manga={m} onNavigate={handleNavigateToManga} />
-                ))}
-              </div>
-            </div>
-          </section>
+              </section>
+            )}
+
+            {/* Recently Updated Section */}
+            {(sectionsLoading || recentlyUpdated.length > 0) && (
+              <section className="py-6 border-b border-zinc-900">
+                <div className="max-w-7xl mx-auto px-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-5 h-5 text-blue-500" />
+                      <h2 className="text-lg font-bold">Recently Updated</h2>
+                    </div>
+                  </div>
+                  {sectionsLoading ? (
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex-shrink-0 w-[260px] md:w-[300px] h-[160px] md:h-[180px] rounded-2xl bg-zinc-900 shimmer" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div ref={recentlyUpdatedRef} className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                      {recentlyUpdated.map((m) => (
+                        <SectionCard key={m.id} manga={m} onNavigate={handleNavigateToManga} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+          </>
         )}
 
         {/* Browser Mode Header - Show active filters summary */}

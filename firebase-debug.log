@@ -1,0 +1,110 @@
+[debug] [2025-12-01T04:46:20.341Z] ----------------------------------------------------------------------
+[debug] [2025-12-01T04:46:20.348Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Owner\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --project manga-dex
+[debug] [2025-12-01T04:46:20.349Z] CLI Version:   14.26.0
+[debug] [2025-12-01T04:46:20.349Z] Platform:      win32
+[debug] [2025-12-01T04:46:20.350Z] Node Version:  v20.17.0
+[debug] [2025-12-01T04:46:20.350Z] Time:          Sun Nov 30 2025 23:46:20 GMT-0500 (Eastern Standard Time)
+[debug] [2025-12-01T04:46:20.350Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-01T04:46:20.829Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-12-01T04:46:20.830Z] > authorizing via signed-in user (allenposton5@gmail.com)
+[debug] [2025-12-01T04:46:20.830Z] [iam] checking project manga-dex for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2025-12-01T04:46:20.832Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:20.833Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:20.835Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/manga-dex:testIamPermissions [none]
+[debug] [2025-12-01T04:46:20.835Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/manga-dex:testIamPermissions x-goog-quota-user=projects/manga-dex
+[debug] [2025-12-01T04:46:20.836Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/manga-dex:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-01T04:46:21.156Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/manga-dex:testIamPermissions 200
+[debug] [2025-12-01T04:46:21.156Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/manga-dex:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-12-01T04:46:21.158Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:21.158Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:21.159Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/manga-dex [none]
+[debug] [2025-12-01T04:46:21.543Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/manga-dex 200
+[debug] [2025-12-01T04:46:21.543Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/manga-dex {"projectId":"manga-dex","projectNumber":"1086648810898","displayName":"manga-dex","name":"projects/manga-dex","resources":{"hostingSite":"manga-dex"},"state":"ACTIVE","etag":"1_a462463d-9644-4513-995a-42002ae57f85"}
+[info] 
+[info] === Deploying to 'manga-dex'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2025-12-01T04:46:21.558Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:21.558Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:21.559Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions [none]
+[debug] [2025-12-01T04:46:21.559Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2025-12-01T04:46:22.275Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions 200
+[debug] [2025-12-01T04:46:22.275Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions {"name":"projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[manga-dex]: beginning deploy... 
+[info] i  hosting[manga-dex]: found 10 files in dist 
+[debug] [2025-12-01T04:46:22.318Z] [hosting] uploading with 200 concurrency
+[debug] [2025-12-01T04:46:22.355Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.356Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.358Z] [hosting] hash cache [ZGlzdA] stored for 10 files
+[debug] [2025-12-01T04:46:22.359Z] [hosting][hash queue][FINAL] {"max":24,"min":2,"avg":6.4,"active":0,"complete":10,"success":10,"errored":0,"retried":0,"total":10,"elapsed":36}
+[debug] [2025-12-01T04:46:22.360Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc:populateFiles [none]
+[debug] [2025-12-01T04:46:22.360Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc:populateFiles {"files":{"/favicon.svg":"4bbc73dc9a37cfb37b96bf8ac0c9e81b8200cde2085d6fa354552a3804d95991","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/cover.jpg":"a2e917adb8a9db8e37504138b085f4376fcadccca258258e9caf9cd26d2ee5a7","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/1/5.jpg":"992118ded6107b0b3e80fb369a5940b1beece4ced1010f4ecd41de6f8ec0e221","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/1/4.jpg":"992118ded6107b0b3e80fb369a5940b1beece4ced1010f4ecd41de6f8ec0e221","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/1/3.jpg":"992118ded6107b0b3e80fb369a5940b1beece4ced1010f4ecd41de6f8ec0e221","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/1/2.jpg":"992118ded6107b0b3e80fb369a5940b1beece4ced1010f4ecd41de6f8ec0e221","/manga/8d900ef2-8aa5-4916-9d4a-3b72c0b593b8/1/1.jpg":"992118ded6107b0b3e80fb369a5940b1beece4ced1010f4ecd41de6f8ec0e221","/index.html":"cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31","/assets/index-PZq8j99B.css":"a2620ec8d8cd5d49a00a7899f712e3faae7cbb80792a60260bded57b9b0e2a74","/assets/index-DogWsYKH.js":"3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d"}}
+[debug] [2025-12-01T04:46:22.509Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc:populateFiles 200
+[debug] [2025-12-01T04:46:22.509Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc:populateFiles {"uploadRequiredHashes":["cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31","3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d"],"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files"}
+[debug] [2025-12-01T04:46:22.511Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.511Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.511Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.511Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:22.512Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31 [none]
+[debug] [2025-12-01T04:46:22.512Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31 [stream]
+[debug] [2025-12-01T04:46:22.514Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d [none]
+[debug] [2025-12-01T04:46:22.514Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d [stream]
+[debug] [2025-12-01T04:46:22.516Z] [hosting][populate queue][FINAL] {"max":157,"min":157,"avg":157,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":161}
+[debug] [2025-12-01T04:46:22.517Z] [hosting] uploads queued: 2
+[debug] [2025-12-01T04:46:23.283Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31 200
+[debug] [2025-12-01T04:46:23.284Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/cadb18e9a25634a840422c943c2b48f66c0a3477c7c8e7f4e3baa9b8d7c1ba31 [stream]
+[debug] [2025-12-01T04:46:23.394Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d 200
+[debug] [2025-12-01T04:46:23.394Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/manga-dex/versions/66c64c9cd2f163bc/files/3166822891c7214e56bc4c1432e0e14bf7ee728b5b5475f4eb383d084e8e034d [stream]
+[debug] [2025-12-01T04:46:23.395Z] [hosting][upload queue][FINAL] {"max":884,"min":774,"avg":829,"active":0,"complete":2,"success":2,"errored":0,"retried":0,"total":2,"elapsed":885}
+[info] +  hosting[manga-dex]: file upload complete 
+[debug] [2025-12-01T04:46:23.397Z] [hosting] deploy completed after 1116ms
+[debug] [2025-12-01T04:46:23.397Z] [
+  {
+    "config": {
+      "public": "dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "site": "manga-dex"
+    },
+    "version": "projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc"
+  }
+]
+[info] i  hosting[manga-dex]: finalizing version... 
+[debug] [2025-12-01T04:46:23.401Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:23.401Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:23.403Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions/66c64c9cd2f163bc updateMask=status%2Cconfig
+[debug] [2025-12-01T04:46:23.403Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions/66c64c9cd2f163bc {"status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]}}
+[debug] [2025-12-01T04:46:23.599Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions/66c64c9cd2f163bc 200
+[debug] [2025-12-01T04:46:23.600Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/versions/66c64c9cd2f163bc {"name":"projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-12-01T04:46:21.217108Z","createUser":{"email":"allenposton5@gmail.com"},"finalizeTime":"2025-12-01T04:46:22.851270Z","finalizeUser":{"email":"allenposton5@gmail.com"}}
+[debug] [2025-12-01T04:46:23.600Z] [hosting] finalized version for manga-dex:[object Object]
+[info] +  hosting[manga-dex]: version finalized 
+[info] i  hosting[manga-dex]: releasing new version... 
+[debug] [2025-12-01T04:46:23.603Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:23.603Z] Checked if tokens are valid: true, expires at: 1764565411206
+[debug] [2025-12-01T04:46:23.604Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/channels/live/releases versionName=projects%2F1086648810898%2Fsites%2Fmanga-dex%2Fversions%2F66c64c9cd2f163bc
+[debug] [2025-12-01T04:46:23.604Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/channels/live/releases {}
+[debug] [2025-12-01T04:46:23.755Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/channels/live/releases 200
+[debug] [2025-12-01T04:46:23.756Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/manga-dex/channels/live/releases {"name":"projects/1086648810898/sites/manga-dex/channels/live/releases/1764564382459000","version":{"name":"projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-12-01T04:46:21.217108Z","createUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"},"finalizeTime":"2025-12-01T04:46:22.851270Z","finalizeUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"}},"type":"DEPLOY","releaseTime":"2025-12-01T04:46:22.459Z","releaseUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"}}
+[debug] [2025-12-01T04:46:23.756Z] [hosting] release: {"name":"projects/1086648810898/sites/manga-dex/channels/live/releases/1764564382459000","version":{"name":"projects/1086648810898/sites/manga-dex/versions/66c64c9cd2f163bc","status":"FINALIZED","config":{"rewrites":[{"glob":"**","path":"/index.html"}]},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2025-12-01T04:46:21.217108Z","createUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"},"finalizeTime":"2025-12-01T04:46:22.851270Z","finalizeUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"}},"type":"DEPLOY","releaseTime":"2025-12-01T04:46:22.459Z","releaseUser":{"email":"allenposton5@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocI7M6gpJdQCFOouKFie21Xq1azXwQBht9uSxz_ko-vaShjERA=mo"}}
+[info] +  hosting[manga-dex]: release complete 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/manga-dex/overview
+[info] Hosting URL: https://manga-dex.web.app
+[debug] [2025-12-01T04:46:28.883Z] Error: Timed out.
+    at Timeout._onTimeout (C:\Users\Owner\AppData\Roaming\npm\node_modules\firebase-tools\lib\utils.js:275:49)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+[error] 
+[error] Error: An unexpected error has occurred.

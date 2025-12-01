@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, Settings, X, Maximize, Minimize,
@@ -310,6 +310,7 @@ export default function ChapterReaderPage() {
   }, [settings]);
 
   const isLongStrip = location.state?.isLongStrip;
+  const preferredLang = location.state?.preferredLang || 'en';
 
   // Determine actual reading mode
   // Force scroll mode for long strip/webtoon manga - they're designed for vertical reading
@@ -322,19 +323,38 @@ export default function ChapterReaderPage() {
     setCurrentPage(0);
     const mangaId = decodeURIComponent(id);
     
-    // Fetch pages directly from MangaDex API and chapters from backend
+    // Check if this is a MangaDex manga (UUID format or starts with mangadex:)
+    const isMangaDex = mangaId.startsWith('mangadex:') || 
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mangaId) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
+    
+    // Function to fetch pages from backend API
+    const fetchFromBackend = () => {
+      console.log('[Reader] Fetching pages from backend for:', mangaId, chapterId);
+      return fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`))
+        .then(r => r.json())
+        .then(data => {
+          console.log('[Reader] Backend returned:', data.pages?.length || 0, 'pages');
+          return data.pages || [];
+        });
+    };
+    
+    // Fetch pages - try MangaDex directly for MangaDex content, otherwise use backend
+    const pagesPromise = isMangaDex 
+      ? getMangaDexPages(chapterId).catch(err => {
+          console.error('[Reader] MangaDex pages error:', err);
+          return fetchFromBackend();
+        })
+      : fetchFromBackend();
+    
+    // Fetch pages and chapters
     Promise.all([
-      getMangaDexPages(chapterId).catch(err => {
-        console.error('[Reader] MangaDex pages error:', err);
-        // Fallback to backend API if direct fails
-        return fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`))
-          .then(r => r.json())
-          .then(data => data.pages || []);
-      }),
+      pagesPromise,
       fetch(apiUrl(`/api/chapters/${mangaId}`)).then(r => r.json())
     ]).then(([pageData, c]) => {
       // Handle both array format and {pages: []} format
       const pages = Array.isArray(pageData) ? pageData : (pageData?.pages || []);
+      console.log('[Reader] Loaded', pages.length, 'pages');
       setPages(pages);
       setChapters(c.data || []);
       setLoading(false);
@@ -372,10 +392,88 @@ export default function ChapterReaderPage() {
     }
   }, [currentPage, pages]);
 
-  const currentIdx = chapters.findIndex(c => c.id === chapterId);
-  const prevChapter = currentIdx < chapters.length - 1 ? chapters[currentIdx + 1] : null;
-  const nextChapter = currentIdx > 0 ? chapters[currentIdx - 1] : null;
-  const currentChapter = chapters[currentIdx];
+  const currentChapter = chapters.find(c => c.id === chapterId);
+  const currentChapterNum = parseFloat(currentChapter?.chapter) || 0;
+  
+  // Use preferred language from navigation state, fallback to current chapter's language
+  const targetLang = preferredLang !== 'all' ? preferredLang : (currentChapter?.language || 'en');
+  
+  // Filtered chapters - only show chapters in the selected language
+  // This is used for the chapter dropdown
+  const filteredChapters = useMemo(() => {
+    // Filter to selected language only (unless "all" is selected)
+    let filtered = preferredLang !== 'all' 
+      ? chapters.filter(c => c.language === targetLang)
+      : chapters;
+    
+    // Deduplicate by chapter number (keep first occurrence)
+    const chapterMap = new Map();
+    for (const ch of filtered) {
+      const rawNum = parseFloat(ch.chapter) || 0;
+      const key = rawNum.toString();
+      if (!chapterMap.has(key)) {
+        chapterMap.set(key, ch);
+      }
+    }
+    
+    // Convert back to array and sort by chapter number descending
+    return Array.from(chapterMap.values()).sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numB - numA;
+    });
+  }, [chapters, targetLang, preferredLang]);
+  
+  // Find next/prev chapters by chapter NUMBER, not array position
+  // Only navigate to chapters in the selected language (strict filtering)
+  const getNextChapter = () => {
+    // Find all chapters with a higher chapter number
+    let higherChapters = chapters.filter(c => {
+      const num = parseFloat(c.chapter) || 0;
+      return num > currentChapterNum;
+    });
+    if (higherChapters.length === 0) return null;
+    
+    // Strictly filter to selected language (no fallback)
+    if (preferredLang !== 'all') {
+      higherChapters = higherChapters.filter(c => c.language === targetLang);
+      if (higherChapters.length === 0) return null;
+    }
+    
+    // Sort by chapter number ascending to get closest next chapter
+    higherChapters.sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numA - numB;
+    });
+    return higherChapters[0];
+  };
+  
+  const getPrevChapter = () => {
+    // Find all chapters with a lower chapter number
+    let lowerChapters = chapters.filter(c => {
+      const num = parseFloat(c.chapter) || 0;
+      return num < currentChapterNum;
+    });
+    if (lowerChapters.length === 0) return null;
+    
+    // Strictly filter to selected language (no fallback)
+    if (preferredLang !== 'all') {
+      lowerChapters = lowerChapters.filter(c => c.language === targetLang);
+      if (lowerChapters.length === 0) return null;
+    }
+    
+    // Sort by chapter number descending to get closest prev chapter
+    lowerChapters.sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numB - numA;
+    });
+    return lowerChapters[0];
+  };
+  
+  const nextChapter = getNextChapter();
+  const prevChapter = getPrevChapter();
 
   // Navigation functions
   const goPage = useCallback((dir) => {
@@ -386,11 +484,11 @@ export default function ChapterReaderPage() {
       setCurrentPage(next);
       window.scrollTo(0, 0);
     } else if (effectiveDir > 0 && nextChapter) {
-      navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } });
+      navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } });
     } else if (effectiveDir < 0 && prevChapter) {
-      navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } });
+      navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } });
     }
-  }, [currentPage, pages.length, settings.direction, nextChapter, prevChapter, navigate, id, isLongStrip]);
+  }, [currentPage, pages.length, settings.direction, nextChapter, prevChapter, navigate, id, isLongStrip, preferredLang]);
 
   const goToPage = (pageNum) => {
     if (pageNum >= 0 && pageNum < pages.length) {
@@ -561,7 +659,7 @@ export default function ChapterReaderPage() {
             {/* Center - Chapter Navigation */}
             <div className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                 disabled={!prevChapter}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Previous Chapter"
@@ -570,17 +668,17 @@ export default function ChapterReaderPage() {
               </button>
               
               <select
-                value={chapterId}
-                onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip } })}
+                value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
+                onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
                 className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
               >
-                {chapters.map(c => (
-                  <option key={c.id} value={c.id}>Chapter {c.chapter}</option>
+                {filteredChapters.map(c => (
+                  <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
                 ))}
               </select>
               
               <button
-                onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                 disabled={!nextChapter}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Next Chapter"
@@ -642,7 +740,7 @@ export default function ChapterReaderPage() {
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 {prevChapter && (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                    onClick={() => navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center gap-2 transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -651,7 +749,7 @@ export default function ChapterReaderPage() {
                 )}
                 {nextChapter ? (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                    onClick={() => navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl flex items-center justify-center gap-2 font-semibold transition-colors shadow-lg shadow-orange-500/25"
                   >
                     Next Chapter
@@ -763,7 +861,7 @@ export default function ChapterReaderPage() {
               {/* Mobile Chapter Nav */}
               <div className="flex md:hidden items-center justify-between mb-3">
                 <button
-                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                   disabled={!prevChapter}
                   className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
                 >
@@ -771,7 +869,7 @@ export default function ChapterReaderPage() {
                 </button>
                 <span className="text-sm text-zinc-400">Ch. {currentChapter?.chapter}</span>
                 <button
-                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                   disabled={!nextChapter}
                   className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
                 >
