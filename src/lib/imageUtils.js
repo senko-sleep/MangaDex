@@ -1,19 +1,21 @@
 // Utility for manga cover images with Anilist API and placeholders
 import { getAnilistCover, PLACEHOLDER_COVER } from './anilist';
+import { API_URL } from './api';
 
 // Cache for resolved cover URLs
 const resolvedCoverCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Normalizes cover URL - keeps proxy URLs as-is for cross-origin access
+ * Normalizes cover URL - transforms relative proxy URLs to use full backend URL
  */
 export function normalizeCoverUrl(url) {
   if (!url) return null;
   
-  // Keep proxy URLs as-is - they're already set up for cross-origin access
-  if (url.includes('/api/proxy/image?url=')) {
-    return url;
+  // Transform relative proxy URLs to use full backend URL
+  // This is needed because on Firebase hosting, /api/proxy/image won't work
+  if (url.startsWith('/api/')) {
+    return `${API_URL}${url}`;
   }
   
   // For direct MangaDex URLs, fix wrong domains

@@ -335,7 +335,13 @@ export default function ChapterReaderPage() {
         .then(r => r.json())
         .then(data => {
           console.log('[Reader] Backend returned:', data.pages?.length || 0, 'pages');
-          return data.pages || [];
+          // Transform relative proxy URLs to use full backend URL
+          // This is needed because on Firebase hosting, /api/proxy/image won't work
+          const pages = (data.pages || []).map(page => ({
+            ...page,
+            url: page.url?.startsWith('/api/') ? apiUrl(page.url) : page.url
+          }));
+          return pages;
         });
     };
     
