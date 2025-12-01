@@ -2,19 +2,50 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, X, Eye, EyeOff, Sparkles, TrendingUp,
-  BookOpen, Grid3X3, LayoutGrid
+  BookOpen, Grid3X3, LayoutGrid, Shield, ShieldOff, ShieldAlert,
+  Clock, CheckCircle2, Loader2, Filter, ChevronDown, ArrowUpDown
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 import { getCoverUrl } from '../lib/imageUtils';
 
+// Save state before navigating to manga details
+const saveHomeState = (state) => {
+  sessionStorage.setItem('homeScrollPosition', window.scrollY.toString());
+  sessionStorage.setItem('homeState', JSON.stringify(state));
+  sessionStorage.setItem('homeStateTimestamp', Date.now().toString());
+};
+
+// Get saved state from sessionStorage
+const getSavedState = () => {
+  try {
+    const saved = sessionStorage.getItem('homeState');
+    const timestamp = sessionStorage.getItem('homeStateTimestamp');
+    // Only restore state if it was saved recently (within 30 minutes)
+    if (saved && timestamp && (Date.now() - parseInt(timestamp, 10)) < 30 * 60 * 1000) {
+      return JSON.parse(saved);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+// Clear saved state after restoration
+const clearSavedState = () => {
+  sessionStorage.removeItem('homeState');
+  sessionStorage.removeItem('homeScrollPosition');
+  sessionStorage.removeItem('homeStateTimestamp');
+};
+
 // Manga Card Component
-function MangaCard({ manga, index }) {
+function MangaCard({ manga, index, onNavigate }) {
   const cover = getCoverUrl(manga);
   return (
     <Link 
       to={`/manga/${encodeURIComponent(manga.id)}`} 
       className="group relative fade-in"
       style={{ animationDelay: `${Math.min(index, 20) * 20}ms` }}
+      onClick={onNavigate}
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
         {/* Cover Image */}
@@ -72,12 +103,13 @@ function MangaCard({ manga, index }) {
 }
 
 // Featured Card for Hero Section
-function FeaturedCard({ manga }) {
+function FeaturedCard({ manga, onNavigate }) {
   const cover = getCoverUrl(manga);
   return (
     <Link 
       to={`/manga/${encodeURIComponent(manga.id)}`}
       className="relative flex-shrink-0 w-[260px] md:w-[300px] group"
+      onClick={onNavigate}
     >
       <div className="relative h-[160px] md:h-[180px] rounded-2xl overflow-hidden card-hover">
         {cover ? (
@@ -117,28 +149,55 @@ function MangaSkeleton() {
 }
 
 export default function HomePage() {
-  const [manga, setManga] = useState([]);
-  const [featured, setFeatured] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [query, setQuery] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  // Get saved state for restoration (only on initial mount)
+  const savedStateRef = useRef(getSavedState());
+  const savedState = savedStateRef.current;
+  const shouldSkipInitialFetch = useRef(!!savedState?.manga?.length);
   
-  // Sources & Filters
+  const [manga, setManga] = useState(savedState?.manga || []);
+  const [featured, setFeatured] = useState(savedState?.featured || []);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(!savedState?.manga?.length);
+  const [query, setQuery] = useState(savedState?.search || '');
+  const [search, setSearch] = useState(savedState?.search || '');
+  const [page, setPage] = useState(savedState?.page || 1);
+  const [hasMore, setHasMore] = useState(savedState?.hasMore ?? true);
+  
+  // Sources & Filters - initialize from saved state if available
   const [sources, setSources] = useState([]);
   const [enabledSources, setEnabledSources] = useState([]);
-  const [showAdult, setShowAdult] = useState(false);
+  const [contentRating, setContentRating] = useState(savedState?.contentRating || 'safe');
+  const [showAdult, setShowAdult] = useState(savedState?.showAdult || false);
+  const [statusFilter, setStatusFilter] = useState(savedState?.statusFilter || 'all');
+  const [sortBy, setSortBy] = useState(savedState?.sortBy || 'popular');
   const [allTags, setAllTags] = useState([]);
   const [adultTags, setAdultTags] = useState([]);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [excludedTags, setExcludedTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState(savedState?.selectedTags || []);
+  const [excludedTags, setExcludedTags] = useState(savedState?.excludedTags || []);
   const [showFilters, setShowFilters] = useState(false);
-  const [gridSize, setGridSize] = useState('normal'); // 'compact', 'normal', 'large'
+  const [gridSize, setGridSize] = useState(savedState?.gridSize || 'normal');
+  const [expandedSection, setExpandedSection] = useState('tags');
   
   const loader = useRef(null);
   const featuredRef = useRef(null);
+  
+  // Function to save current state before navigating
+  const handleNavigateToManga = useCallback(() => {
+    saveHomeState({
+      search,
+      contentRating,
+      showAdult,
+      statusFilter,
+      sortBy,
+      selectedTags,
+      excludedTags,
+      gridSize,
+      manga,
+      featured,
+      page,
+      hasMore,
+    });
+  }, [search, contentRating, showAdult, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, featured, page, hasMore]);
 
   // Load sources and tags on mount
   useEffect(() => {
@@ -156,19 +215,61 @@ export default function HomePage() {
     const params = new URLSearchParams();
     if (search) params.set('q', search);
     params.set('page', p);
-    params.set('adult', showAdult);
+    
+    // Content rating filter - simple approach like safe filter
+    // adult=false → safe+suggestive only
+    // adult=true → all content
+    // adult=only → erotica+pornographic only
+    if (contentRating === 'safe') {
+      params.set('adult', 'false');
+    } else if (contentRating === 'adult') {
+      params.set('adult', 'only');
+    } else {
+      params.set('adult', 'true');
+    }
+    
+    // Status filter
+    if (statusFilter !== 'all') {
+      params.set('status', statusFilter);
+    }
+    
+    // Sort filter
+    if (sortBy) {
+      params.set('sort', sortBy);
+    }
+    
+    // Tag filters
     if (selectedTags.length) params.set('tags', selectedTags.join(','));
     if (excludedTags.length) params.set('exclude', excludedTags.join(','));
+    
     return apiUrl(`/api/manga/search?${params}`);
-  }, [search, showAdult, selectedTags, excludedTags]);
+  }, [search, selectedTags, excludedTags, contentRating, statusFilter, sortBy]);
 
   const fetchManga = useCallback(async (reset = false) => {
     if (loading) return;
     setLoading(true);
     try {
       const p = reset ? 1 : page;
-      const res = await fetch(buildUrl(p));
-      const { data } = await res.json();
+      const url = buildUrl(p);
+      console.log('[MangaFox] Fetching manga:', url);
+      
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
+      const json = await res.json();
+      let data = json.data || [];
+      
+      // Filter out safe content when 18+ only is selected
+      if (contentRating === 'adult') {
+        data = data.filter(m => m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic');
+      }
+      
+      if (data.length === 0 && reset) {
+        console.log('[MangaFox] No results found for current filters');
+      }
+      
       setManga(prev => reset ? data : [...prev, ...data]);
       if (reset && data.length > 0) {
         setFeatured(data.slice(0, 6));
@@ -177,19 +278,35 @@ export default function HomePage() {
       setHasMore(data.length >= 20);
       setInitialLoad(false);
     } catch (e) {
-      console.error(e);
+      console.error('[MangaFox] Error fetching manga:', e.message);
+      console.error('[MangaFox] Full error:', e);
       setInitialLoad(false);
     }
     setLoading(false);
-  }, [page, loading, buildUrl]);
+  }, [page, loading, buildUrl, contentRating]);
 
-  // Reset and fetch when filters change
+  // Track if this is the initial mount to prevent double-fetch
+  const isInitialMount = useRef(true);
+  
+  // Reset and fetch when filters change (skip if restoring from saved state)
   useEffect(() => {
+    // Skip the first fetch if we're restoring from saved state with manga loaded
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (shouldSkipInitialFetch.current && manga.length > 0) {
+        shouldSkipInitialFetch.current = false;
+        console.log('[MangaFox] Restored from saved state, skipping initial fetch');
+        return;
+      }
+      shouldSkipInitialFetch.current = false;
+    }
+    
+    console.log('[MangaFox] Filters changed:', { search, contentRating, statusFilter, sortBy, selectedTags, excludedTags });
     setManga([]);
     setPage(1);
     setHasMore(true);
     fetchManga(true);
-  }, [search, showAdult, selectedTags, excludedTags]);
+  }, [search, contentRating, statusFilter, sortBy, selectedTags, excludedTags]);
 
   // Infinite scroll
   useEffect(() => {
@@ -199,6 +316,35 @@ export default function HomePage() {
     if (loader.current) obs.observe(loader.current);
     return () => obs.disconnect();
   }, [hasMore, loading, fetchManga]);
+
+  // Track if scroll has been restored to prevent multiple attempts
+  const hasRestoredScroll = useRef(false);
+  
+  // Restore scroll position when returning from manga details
+  useEffect(() => {
+    // Only attempt restoration once per mount when we have content
+    if (hasRestoredScroll.current || manga.length === 0) return;
+    
+    const savedPosition = sessionStorage.getItem('homeScrollPosition');
+    if (!savedPosition) return;
+    
+    const scrollY = parseInt(savedPosition, 10);
+    if (scrollY <= 0) {
+      clearSavedState();
+      return;
+    }
+    
+    // Mark as restored immediately to prevent re-runs
+    hasRestoredScroll.current = true;
+    
+    // Use setTimeout to ensure DOM is fully painted with all manga cards
+    const timeoutId = setTimeout(() => {
+      window.scrollTo({ top: scrollY, behavior: 'instant' });
+      clearSavedState();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [manga.length]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -218,9 +364,16 @@ export default function HomePage() {
   const clearFilters = () => {
     setSelectedTags([]);
     setExcludedTags([]);
+    setContentRating('safe');
+    setStatusFilter('all');
+    setSortBy('popular');
+    setShowAdult(false);
   };
 
+  // Check if any filters are active (non-default values)
   const hasFilters = selectedTags.length > 0 || excludedTags.length > 0;
+  const hasAdvancedFilters = contentRating !== 'safe' || statusFilter !== 'all' || sortBy !== 'popular';
+  const isInBrowserMode = search || hasFilters || hasAdvancedFilters;
 
   const gridCols = {
     compact: 'grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2',
@@ -265,131 +418,341 @@ export default function HomePage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
+              {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl transition-all ${
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all ${
                   showFilters || hasFilters 
                     ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25' 
                     : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
                 }`}
               >
-                <SlidersHorizontal className="w-5 h-5" />
+                <Filter className="w-4 h-4" />
+                <span className="text-sm font-medium hidden sm:inline">Filters</span>
+                {hasFilters && (
+                  <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center font-bold">
+                    {selectedTags.length + excludedTags.length}
+                  </span>
+                )}
               </button>
 
-              <button
-                onClick={() => setShowAdult(!showAdult)}
-                className={`p-2.5 rounded-xl transition-all ${
-                  showAdult 
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/25' 
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-                title={showAdult ? 'Hide adult content' : 'Show adult content'}
-              >
-                {showAdult ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-              </button>
+              {/* Grid Size Toggle */}
+              <div className="hidden md:flex items-center bg-zinc-900 rounded-xl p-1">
+                <button
+                  onClick={() => setGridSize('compact')}
+                  className={`p-2 rounded-lg transition-all ${gridSize === 'compact' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}
+                  title="Compact grid"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setGridSize('normal')}
+                  className={`p-2 rounded-lg transition-all ${gridSize === 'normal' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}
+                  title="Normal grid"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
-
         </div>
 
-        {/* Filters Panel */}
+        {/* Advanced Filters Panel */}
         {showFilters && (
-          <div className="border-t border-white/5 bg-zinc-950/95 backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-4 py-4 slide-up">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-orange-500" />
-                  <span className="text-sm font-semibold">Filter by Tags</span>
-                  <span className="text-xs text-zinc-500">(Click to include, right-click to exclude)</span>
+          <>
+            {/* Backdrop overlay - click to close */}
+            <div 
+              className="fixed inset-0 bg-black/40 z-40 animate-in fade-in duration-200"
+              onClick={() => setShowFilters(false)}
+            />
+            <div className="relative z-50 border-t border-white/5 bg-zinc-950/98 backdrop-blur-xl shadow-2xl shadow-black/50">
+              <div className="max-w-7xl mx-auto px-4 py-5 slide-up">
+              {/* Filter Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                    <SlidersHorizontal className="w-4 h-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold">Advanced Filters</h3>
+                    <p className="text-xs text-zinc-500">Refine your search results</p>
+                  </div>
                 </div>
                 {hasFilters && (
                   <button 
                     onClick={clearFilters} 
-                    className="text-xs text-orange-500 hover:text-orange-400 font-medium flex items-center gap-1"
+                    className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-medium flex items-center gap-1.5 transition-colors"
                   >
-                    <X className="w-3 h-3" /> Clear all
+                    <X className="w-3 h-3" /> Clear All
                   </button>
                 )}
               </div>
-              
-              {/* Active Filters */}
-              {(selectedTags.length > 0 || excludedTags.length > 0) && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {selectedTags.map(tag => (
-                    <span 
-                      key={tag} 
-                      className="px-3 py-1 text-xs bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center gap-1.5 border border-emerald-500/30"
-                    >
-                      <span className="font-bold">+</span>{tag}
-                      <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => toggleTag(tag, 'include')} />
-                    </span>
-                  ))}
-                  {excludedTags.map(tag => (
-                    <span 
-                      key={tag} 
-                      className="px-3 py-1 text-xs bg-red-500/20 text-red-400 rounded-lg flex items-center gap-1.5 border border-red-500/30"
-                    >
-                      <span className="font-bold">-</span>{tag}
-                      <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => toggleTag(tag, 'exclude')} />
-                    </span>
-                  ))}
-                </div>
-              )}
 
-              {/* Tag List */}
-              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto scrollbar-thin pr-2">
-                {allTags.map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => toggleTag(tag, 'include')}
-                    onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                      selectedTags.includes(tag) 
-                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' 
-                        : excludedTags.includes(tag) 
+              {/* Quick Filters Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                {/* Content Rating */}
+                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Rating</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setContentRating('safe'); setShowAdult(false); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        contentRating === 'safe' 
+                          ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      Safe
+                    </button>
+                    <button
+                      onClick={() => { setContentRating('all'); setShowAdult(true); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        contentRating === 'all' 
+                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      All
+                    </button>
+                    <button
+                      onClick={() => { setContentRating('adult'); setShowAdult(true); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        contentRating === 'adult' 
                           ? 'bg-red-500 text-white shadow-lg shadow-red-500/25' 
-                          : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                ))}
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      18+
+                    </button>
+                  </div>
+                </div>
+
+                {/* Status Filter */}
+                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setStatusFilter('all')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        statusFilter === 'all' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('ongoing')}
+                      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        statusFilter === 'ongoing' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Loader2 className="w-3 h-3" />
+                      Ongoing
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('completed')}
+                      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        statusFilter === 'completed' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      Completed
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sort By */}
+                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ArrowUpDown className="w-4 h-4 text-purple-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort By</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSortBy('popular')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        sortBy === 'popular' 
+                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      Popular
+                    </button>
+                    <button
+                      onClick={() => setSortBy('latest')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        sortBy === 'latest' 
+                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      Latest
+                    </button>
+                    <button
+                      onClick={() => setSortBy('updated')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        sortBy === 'updated' 
+                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      Updated
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Adult Tags */}
-              {showAdult && adultTags.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-zinc-800">
+              {/* Active Filters Display */}
+              {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                <div className="mb-4 p-3 bg-zinc-900/30 rounded-xl border border-zinc-800/50">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-red-400">Adult Tags</span>
+                    <span className="text-xs font-medium text-zinc-400">Active Filters:</span>
                   </div>
-                  <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto scrollbar-thin">
-                    {adultTags.map(tag => (
-                      <button
-                        key={tag}
-                        onClick={() => toggleTag(tag, 'include')}
-                        onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                        className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                          selectedTags.includes(tag) 
-                            ? 'bg-emerald-500 text-white' 
-                            : excludedTags.includes(tag) 
-                              ? 'bg-red-500 text-white' 
-                              : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                        }`}
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="px-2.5 py-1 text-xs bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center gap-1.5 border border-emerald-500/30"
                       >
-                        {tag}
-                      </button>
+                        <span className="text-emerald-500 font-bold">+</span>{tag}
+                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleTag(tag, 'include')} />
+                      </span>
+                    ))}
+                    {excludedTags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="px-2.5 py-1 text-xs bg-red-500/20 text-red-400 rounded-lg flex items-center gap-1.5 border border-red-500/30"
+                      >
+                        <span className="text-red-500 font-bold">−</span>{tag}
+                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleTag(tag, 'exclude')} />
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Tags Section */}
+              <div className="bg-zinc-900/30 rounded-xl border border-zinc-800/50 overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-orange-500/20 flex items-center justify-center">
+                      <Filter className="w-3 h-3 text-orange-500" />
+                    </div>
+                    <span className="text-sm font-medium">Genre & Tags</span>
+                    <span className="text-xs text-zinc-500 hidden sm:inline">(Click to include, right-click to exclude)</span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {expandedSection === 'tags' && (
+                  <div className="px-4 pb-4 border-t border-zinc-800/50">
+                    {/* Main Tags */}
+                    <div className="pt-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {allTags.map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag, 'include')}
+                            onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
+                            className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                              selectedTags.includes(tag) 
+                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25' 
+                                : excludedTags.includes(tag) 
+                                  ? 'bg-red-500 text-white shadow-md shadow-red-500/25' 
+                                  : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Adult Tags */}
+                    {showAdult && adultTags.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-zinc-800/50">
+                        <div className="flex items-center gap-2 mb-3">
+                          <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                          <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Adult Content Tags</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {adultTags.map(tag => (
+                            <button
+                              key={tag}
+                              onClick={() => toggleTag(tag, 'include')}
+                              onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
+                              className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                                selectedTags.includes(tag) 
+                                  ? 'bg-emerald-500 text-white' 
+                                  : excludedTags.includes(tag) 
+                                    ? 'bg-red-500 text-white' 
+                                    : 'bg-red-950/50 text-red-300/70 hover:text-red-200 hover:bg-red-900/50 border border-red-900/30'
+                              }`}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Bar */}
+              <div className="mt-5 pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-4">
+                <div className="text-xs text-zinc-500">
+                  {hasFilters ? (
+                    <span>{selectedTags.length + excludedTags.length} filter(s) active</span>
+                  ) : (
+                    <span>No filters applied</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      clearFilters();
+                      setShowFilters(false);
+                    }}
+                    className="px-4 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="px-5 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition-colors shadow-lg shadow-orange-500/25 flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+          </>
         )}
       </header>
 
       <main className="relative">
-        {/* Featured Section - Only show when not searching */}
-        {!search && featured.length > 0 && (
+        {/* Featured Section - Only show when NOT in browser mode */}
+        {!isInBrowserMode && featured.length > 0 && (
           <section className="py-6 border-b border-zinc-900">
             <div className="max-w-7xl mx-auto px-4">
               <div className="flex items-center justify-between mb-4">
@@ -403,11 +766,77 @@ export default function HomePage() {
                 className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide"
               >
                 {featured.map((m) => (
-                  <FeaturedCard key={m.id} manga={m} />
+                  <FeaturedCard key={m.id} manga={m} onNavigate={handleNavigateToManga} />
                 ))}
               </div>
             </div>
           </section>
+        )}
+
+        {/* Browser Mode Header - Show active filters summary */}
+        {isInBrowserMode && (
+          <div className="bg-zinc-900/50 border-b border-zinc-800">
+            <div className="max-w-7xl mx-auto px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Filter className="w-4 h-4 text-orange-500" />
+                    <span className="font-medium">Browsing:</span>
+                  </div>
+                  {search && (
+                    <span className="px-2 py-1 bg-zinc-800 rounded-lg text-xs">
+                      Search: <span className="text-orange-400">{search}</span>
+                    </span>
+                  )}
+                  {contentRating === 'adult' && (
+                    <span className="px-2 py-1 rounded-lg text-xs bg-red-500/20 text-red-400">
+                      18+ Only
+                    </span>
+                  )}
+                  {contentRating === 'all' && (
+                    <span className="px-2 py-1 rounded-lg text-xs bg-amber-500/20 text-amber-400">
+                      All Content
+                    </span>
+                  )}
+                  {statusFilter !== 'all' && (
+                    <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-xs capitalize">
+                      {statusFilter}
+                    </span>
+                  )}
+                  {sortBy !== 'popular' && (
+                    <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs capitalize">
+                      Sort: {sortBy}
+                    </span>
+                  )}
+                  {selectedTags.map(tag => (
+                    <span key={tag} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs flex items-center gap-1">
+                      +{tag}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-white" 
+                        onClick={() => toggleTag(tag, 'include')} 
+                      />
+                    </span>
+                  ))}
+                  {excludedTags.map(tag => (
+                    <span key={tag} className="px-2 py-1 bg-red-500/20 text-red-400 rounded-lg text-xs flex items-center gap-1">
+                      -{tag}
+                      <X 
+                        className="w-3 h-3 cursor-pointer hover:text-white" 
+                        onClick={() => toggleTag(tag, 'exclude')} 
+                      />
+                    </span>
+                  ))}
+                </div>
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Main Grid */}
@@ -415,17 +844,15 @@ export default function HomePage() {
           {/* Section Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              {search ? (
+              {isInBrowserMode ? (
                 <>
-                  <Search className="w-5 h-5 text-orange-500" />
-                  <h2 className="text-lg font-bold">
-                    Results for "<span className="text-orange-500">{search}</span>"
-                  </h2>
+                  <Filter className="w-5 h-5 text-orange-500" />
+                  <h2 className="text-lg font-bold">Browse Results</h2>
                 </>
               ) : (
                 <>
                   <TrendingUp className="w-5 h-5 text-orange-500" />
-                  <h2 className="text-lg font-bold">Browse All</h2>
+                  <h2 className="text-lg font-bold">Popular Manga</h2>
                 </>
               )}
               {manga.length > 0 && (
@@ -477,7 +904,7 @@ export default function HomePage() {
           {!initialLoad && manga.length > 0 && (
             <div className={`grid ${gridCols[gridSize]}`}>
               {manga.map((m, i) => (
-                <MangaCard key={m.id} manga={m} index={i} />
+                <MangaCard key={m.id} manga={m} index={i} onNavigate={handleNavigateToManga} />
               ))}
             </div>
           )}

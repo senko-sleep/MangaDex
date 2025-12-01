@@ -670,23 +670,28 @@ export default function ChapterReaderPage() {
           </div>
         </div>
       ) : actualMode === 'double' ? (
-        // Double Page Mode - Clean view with no overlays
+        // Double Page Mode
         <div 
-          className="min-h-screen flex items-center justify-center py-4 px-2 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const isRightSide = x > rect.width / 2;
-            goPage(settings.direction === 'rtl' ? (isRightSide ? -1 : 1) : (isRightSide ? 1 : -1));
-          }}
+          className="min-h-screen flex items-center justify-center pt-14 pb-24 px-12"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
-          <div className="flex items-center justify-center gap-1" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+          {/* Left Navigation Button */}
+          <button
+            onClick={() => goPage(-1)}
+            disabled={currentPage === 0 && !prevChapter}
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          <div className="flex items-center justify-center gap-1" style={{ maxHeight: 'calc(100vh - 9rem)' }}>
             {pages[currentPage] && (
               <img
                 src={pages[currentPage].url}
                 alt={`Page ${currentPage + 1}`}
                 className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 2rem)', maxWidth: 'calc(50vw - 1rem)' }}
+                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
               />
             )}
@@ -695,46 +700,64 @@ export default function ChapterReaderPage() {
                 src={pages[currentPage + 1].url}
                 alt={`Page ${currentPage + 2}`}
                 className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 2rem)', maxWidth: 'calc(50vw - 1rem)' }}
+                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
               />
             )}
           </div>
+
+          {/* Right Navigation Button */}
+          <button
+            onClick={() => goPage(1)}
+            disabled={currentPage >= pages.length - 1 && !nextChapter}
+            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
         </div>
       ) : (
-        // Single Page Mode - Clean view with no overlays
+        // Single Page Mode - Clean view with navigation buttons
         <div 
-          className="min-h-screen flex items-center justify-center py-4 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const isRightSide = x > rect.width / 2;
-            goPage(settings.direction === 'rtl' ? (isRightSide ? -1 : 1) : (isRightSide ? 1 : -1));
-          }}
+          className="min-h-screen flex items-center justify-center pt-14 pb-24"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
+          {/* Left Navigation Button */}
+          <button
+            onClick={() => goPage(-1)}
+            disabled={currentPage === 0 && !prevChapter}
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
           {pages[currentPage] && (
             <img
               src={pages[currentPage].url}
               alt={`Page ${currentPage + 1}`}
-              className="select-none max-w-full object-contain"
+              className="select-none object-contain"
               style={{ 
-                maxHeight: 'calc(100vh - 2rem)',
-                maxWidth: 'calc(100vw - 2rem)'
+                maxHeight: 'calc(100vh - 9rem)',
+                maxWidth: 'calc(100vw - 4rem)'
               }}
               draggable={false}
             />
           )}
-          
+
+          {/* Right Navigation Button */}
+          <button
+            onClick={() => goPage(1)}
+            disabled={currentPage === pages.length - 1 && !nextChapter}
+            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
         </div>
       )}
 
-      {/* Page Navigation for Page Modes - Only shows on hover/tap */}
+      {/* Page Navigation for Page Modes - Always visible */}
       {actualMode !== 'scroll' && (
-        <div 
-          className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-300 ${
-            showUI ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-          }`}
-        >
+        <div className="fixed bottom-0 left-0 right-0 z-40">
           <div className="bg-black/90 backdrop-blur-sm border-t border-zinc-800/50 py-4 px-4">
             <div className="max-w-4xl mx-auto">
               {/* Mobile Chapter Nav */}

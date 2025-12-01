@@ -45,6 +45,7 @@ export async function search(query, options = {}) {
   const { 
     sourceIds = null, 
     includeAdult = false, 
+    adultOnly = false,
     page = 1,
     tags = [],
     excludeTags = [],
@@ -56,14 +57,14 @@ export async function search(query, options = {}) {
 
   const targetSources = sourceIds 
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass tags directly to scrapers that support native filtering (like MangaDex)
-        const data = await scraper.search(query, page, includeAdult, tags, excludeTags);
+        // Pass tags and adultOnly to scrapers that support native filtering (like MangaDex)
+        const data = await scraper.search(query, page, includeAdult || adultOnly, tags, excludeTags, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Search error:`, e.message);
@@ -82,7 +83,7 @@ export async function search(query, options = {}) {
 
 // Get popular manga
 export async function getPopular(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1, tags = [], excludeTags = [] } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, tags = [], excludeTags = [] } = options;
 
   const cacheKey = `popular:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
@@ -90,14 +91,14 @@ export async function getPopular(options = {}) {
 
   const targetSources = sourceIds 
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass tags directly to scrapers that support native filtering
-        const data = await scraper.getPopular(page, includeAdult, tags, excludeTags);
+        // Pass tags and adultOnly to scrapers that support native filtering
+        const data = await scraper.getPopular(page, includeAdult || adultOnly, tags, excludeTags, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Popular error:`, e.message);

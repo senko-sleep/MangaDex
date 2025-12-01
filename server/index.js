@@ -124,22 +124,53 @@ app.get('/api/manga/search', async (req, res) => {
       q = '', 
       sources: sourceIds,
       adult = 'false',
+      status,
+      sort = 'popular',
       page = '1',
       tags,
       exclude,
     } = req.query;
 
+    // adult=false → safe only, adult=true → all, adult=only → 18+ only
+    const isAdultOnly = adult === 'only';
+    const includeAdult = adult === 'true' || isAdultOnly;
+    
     const options = {
       sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true',
+      includeAdult,
+      adultOnly: isAdultOnly,
       page: parseInt(page, 10),
       tags: tags ? tags.split(',') : [],
       excludeTags: exclude ? exclude.split(',') : [],
     };
 
-    const data = q 
+    console.log(`[Search] Options:`, { query: q, adult, isAdultOnly, status, sort, page });
+
+    let data = q 
       ? await scrapers.search(q, options)
       : await scrapers.getPopular(options);
+
+    console.log(`[Search] Got ${data.length} results from scrapers`);
+
+    // Filter by status if specified
+    if (status && status !== 'all') {
+      data = data.filter(m => {
+        const mangaStatus = (m.status || '').toLowerCase();
+        return mangaStatus === status.toLowerCase() || 
+               mangaStatus.includes(status.toLowerCase());
+      });
+      console.log(`[Search] Status filter (${status}): ${data.length} results`);
+    }
+
+    // Sort results
+    if (sort === 'latest') {
+      data.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    } else if (sort === 'updated') {
+      data.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    } else if (sort === 'title') {
+      data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    }
+    // 'popular' is default from scrapers
 
     res.json({ data, total: data.length });
   } catch (e) {

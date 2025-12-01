@@ -43,7 +43,7 @@ export class MangaDexScraper extends BaseScraper {
     }).filter(Boolean);
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
     try {
       const offset = (page - 1) * 24;
       const params = new URLSearchParams();
@@ -53,12 +53,17 @@ export class MangaDexScraper extends BaseScraper {
       params.append('order[followedCount]', 'desc');
       params.append('hasAvailableChapters', 'true');
       
-      // Content ratings
-      params.append('contentRating[]', 'safe');
-      params.append('contentRating[]', 'suggestive');
-      if (includeAdult) {
+      // Content ratings - for adult only, ONLY request adult content
+      if (adultOnly) {
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
+      } else {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
+        if (includeAdult) {
+          params.append('contentRating[]', 'erotica');
+          params.append('contentRating[]', 'pornographic');
+        }
       }
       
       if (query) params.set('title', query);
@@ -82,8 +87,8 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
-    return this.search('', page, includeAdult, tags, excludeTags);
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
+    return this.search('', page, includeAdult, tags, excludeTags, adultOnly);
   }
 
   async getLatest(page = 1, includeAdult = true) {

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   Search, BookOpen, Play, ChevronDown, SortAsc, SortDesc,
   Heart, Share2, BookMarked, Globe, Info, ArrowLeft
@@ -7,16 +7,71 @@ import {
 import { apiUrl } from '../lib/api';
 import { getCoverUrl, getAnilistCoverUrl, PLACEHOLDER_COVER } from '../lib/imageUtils';
 
-// Language code to name mapping
+// Language code to name and flag mapping
 const LANGUAGES = {
-  en: 'English', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', 'zh-hk': 'Chinese (HK)',
-  es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', 'pt-br': 'Portuguese (BR)',
-  ru: 'Russian', pl: 'Polish', vi: 'Vietnamese', th: 'Thai', id: 'Indonesian', ar: 'Arabic',
-  tr: 'Turkish', nl: 'Dutch', sv: 'Swedish', fil: 'Filipino', ms: 'Malay', hi: 'Hindi'
+  en: '🇬🇧 English',
+  ja: '🇯🇵 Japanese', 
+  ko: '🇰🇷 Korean', 
+  zh: '🇨🇳 Chinese', 
+  'zh-hk': '🇭🇰 Chinese (HK)',
+  'zh-ro': '🇨🇳 Chinese (Romanized)',
+  es: '🇪🇸 Spanish', 
+  'es-la': '🇲🇽 Spanish (LATAM)',
+  fr: '🇫🇷 French', 
+  de: '🇩🇪 German', 
+  it: '🇮🇹 Italian', 
+  pt: '🇵🇹 Portuguese', 
+  'pt-br': '🇧🇷 Portuguese (BR)',
+  ru: '🇷🇺 Russian', 
+  pl: '🇵🇱 Polish', 
+  vi: '🇻🇳 Vietnamese', 
+  th: '🇹🇭 Thai', 
+  id: '🇮🇩 Indonesian', 
+  ar: '🇸🇦 Arabic',
+  tr: '🇹🇷 Turkish', 
+  nl: '🇳🇱 Dutch', 
+  sv: '🇸🇪 Swedish', 
+  fil: '🇵🇭 Filipino', 
+  ms: '🇲🇾 Malay', 
+  hi: '🇮🇳 Hindi',
+  uk: '🇺🇦 Ukrainian',
+  cs: '🇨🇿 Czech',
+  hu: '🇭🇺 Hungarian',
+  ro: '🇷🇴 Romanian',
+  bg: '🇧🇬 Bulgarian',
+  he: '🇮🇱 Hebrew',
+  fa: '🇮🇷 Persian',
+  bn: '🇧🇩 Bengali',
+  my: '🇲🇲 Burmese',
+  mn: '🇲🇳 Mongolian',
+  lt: '🌐 Lithuanian',
+  el: '🇬🇷 Greek',
+  da: '🇩🇰 Danish',
+  fi: '🇫🇮 Finnish',
+  no: '🇳🇴 Norwegian',
+};
+
+// Save detail page scroll position before navigating to chapter
+const saveDetailScrollPosition = (mangaId) => {
+  const key = `detailScrollPosition_${mangaId}`;
+  sessionStorage.setItem(key, window.scrollY.toString());
+};
+
+// Get saved scroll position for detail page
+const getDetailScrollPosition = (mangaId) => {
+  const key = `detailScrollPosition_${mangaId}`;
+  const saved = sessionStorage.getItem(key);
+  return saved ? parseInt(saved, 10) : null;
+};
+
+// Clear saved scroll position
+const clearDetailScrollPosition = (mangaId) => {
+  const key = `detailScrollPosition_${mangaId}`;
+  sessionStorage.removeItem(key);
 };
 
 // Compact Chapter Row Component
-function ChapterRow({ chapter, mangaId, isLongStrip }) {
+function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate }) {
   const timeAgo = (date) => {
     if (!date) return '';
     const now = new Date();
@@ -36,6 +91,7 @@ function ChapterRow({ chapter, mangaId, isLongStrip }) {
       to={`/manga/${mangaId}/${chapter.id}`}
       state={{ isLongStrip }}
       className="group flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+      onClick={onNavigate}
     >
       {/* Chapter Number */}
       <span className="w-14 text-sm font-semibold text-zinc-300 group-hover:text-orange-400 transition-colors shrink-0">
@@ -87,6 +143,7 @@ function DetailSkeleton() {
 
 export default function MangaDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [manga, setManga] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +152,40 @@ export default function MangaDetailPage() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [langFilter, setLangFilter] = useState('en'); // Default to English
   const [coverUrl, setCoverUrl] = useState(null);
+  const hasRestoredScroll = useRef(false);
+
+  // Save scroll position when navigating to a chapter
+  const handleChapterNavigate = () => {
+    saveDetailScrollPosition(id);
+  };
+
+  // Restore scroll position when returning from chapter reader
+  useEffect(() => {
+    // Wait until loading is done and we have manga data
+    if (loading || !manga || hasRestoredScroll.current) return;
+    
+    const savedPosition = getDetailScrollPosition(id);
+    if (savedPosition === null || savedPosition <= 0) {
+      hasRestoredScroll.current = true;
+      return;
+    }
+    
+    // Mark as restored immediately to prevent re-runs
+    hasRestoredScroll.current = true;
+    
+    // Use setTimeout to ensure DOM is fully painted
+    const timeoutId = setTimeout(() => {
+      window.scrollTo({ top: savedPosition, behavior: 'instant' });
+      clearDetailScrollPosition(id);
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [loading, manga, id]);
+
+  // Reset scroll restoration flag when manga changes
+  useEffect(() => {
+    hasRestoredScroll.current = false;
+  }, [id]);
 
   useEffect(() => {
     const mangaId = decodeURIComponent(id);
@@ -250,13 +341,13 @@ export default function MangaDetailPage() {
         {/* Navigation */}
         <header className="absolute top-0 left-0 right-0 z-20">
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-            <Link 
-              to="/"
+            <button 
+              onClick={() => navigate('/')}
               className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors flex items-center gap-2"
             >
-              <Search className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5" />
               <span className="text-sm font-medium hidden sm:inline">Browse</span>
-            </Link>
+            </button>
             
             <div className="flex items-center gap-2">
               <button 
@@ -307,6 +398,7 @@ export default function MangaDetailPage() {
                   to={`/manga/${id}/${firstChapter.id}`}
                   state={{ isLongStrip: manga.isLongStrip }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-semibold transition-colors shadow-lg shadow-orange-500/25"
+                  onClick={handleChapterNavigate}
                 >
                   <Play className="w-4 h-4 fill-current" />
                   Start Reading
@@ -317,6 +409,7 @@ export default function MangaDetailPage() {
                   to={`/manga/${id}/${latestChapter.id}`}
                   state={{ isLongStrip: manga.isLongStrip }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
+                  onClick={handleChapterNavigate}
                 >
                   <BookMarked className="w-4 h-4" />
                   Latest Ch. {latestChapter.chapter}
@@ -328,17 +421,17 @@ export default function MangaDetailPage() {
           {/* Info */}
           <div className="flex-1 min-w-0 pt-2 md:pt-8">
             {/* Title */}
-            <h1 className="text-2xl md:text-3xl font-bold mb-3 leading-tight">{manga.title}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2 leading-tight">{manga.title}</h1>
+            
+            {/* Alternative Titles */}
+            {manga.altTitles && manga.altTitles.length > 0 && (
+              <p className="text-sm text-zinc-500 mb-3 line-clamp-1">
+                Also known as: {manga.altTitles.slice(0, 2).join(', ')}
+              </p>
+            )}
             
             {/* Badges Row - Clean and minimal */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              {/* Language */}
-              {manga.language && (
-                <span className="px-2.5 py-1 text-xs font-medium bg-emerald-500/15 text-emerald-400 rounded-lg flex items-center gap-1.5">
-                  <Globe className="w-3 h-3" />
-                  {LANGUAGES[manga.language] || manga.language.toUpperCase()}
-                </span>
-              )}
               {/* Status */}
               {manga.status && (
                 <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${
@@ -357,8 +450,21 @@ export default function MangaDetailPage() {
                   Webtoon
                 </span>
               )}
-              {/* Adult */}
-              {manga.isAdult && (
+              {/* Content Rating */}
+              {manga.contentRating && manga.contentRating !== 'safe' && (
+                <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${
+                  manga.contentRating === 'pornographic' || manga.contentRating === 'erotica'
+                    ? 'bg-red-500/15 text-red-400'
+                    : manga.contentRating === 'suggestive'
+                      ? 'bg-amber-500/15 text-amber-400'
+                      : 'bg-zinc-800 text-zinc-400'
+                }`}>
+                  {manga.contentRating === 'pornographic' ? '18+' : 
+                   manga.contentRating === 'erotica' ? 'Mature' :
+                   manga.contentRating.charAt(0).toUpperCase() + manga.contentRating.slice(1)}
+                </span>
+              )}
+              {manga.isAdult && !manga.contentRating && (
                 <span className="px-2.5 py-1 text-xs font-medium bg-red-500/15 text-red-400 rounded-lg">
                   18+
                 </span>
@@ -369,19 +475,63 @@ export default function MangaDetailPage() {
               </span>
             </div>
 
-            {/* Author & Year - Simple line */}
-            <div className="text-sm text-zinc-400 mb-4">
-              {manga.author && <span>{manga.author}</span>}
-              {manga.artist && manga.artist !== manga.author && (
-                <span className="text-zinc-600"> · Art by {manga.artist}</span>
+            {/* Stats Row */}
+            <div className="flex flex-wrap items-center gap-4 mb-4 text-sm">
+              {manga.author && (
+                <div className="flex items-center gap-1.5 text-zinc-400">
+                  <span className="text-zinc-600">Author:</span>
+                  <span>{manga.author}</span>
+                </div>
               )}
-              {manga.year && <span className="text-zinc-600"> · {manga.year}</span>}
+              {manga.artist && manga.artist !== manga.author && (
+                <div className="flex items-center gap-1.5 text-zinc-400">
+                  <span className="text-zinc-600">Artist:</span>
+                  <span>{manga.artist}</span>
+                </div>
+              )}
+              {manga.year && (
+                <div className="flex items-center gap-1.5 text-zinc-400">
+                  <span className="text-zinc-600">Year:</span>
+                  <span>{manga.year}</span>
+                </div>
+              )}
             </div>
 
-            {/* Genres - Only show top genres, no extra tags */}
+            {/* Available Languages */}
+            {availableLanguages.length > 0 && (
+              <div className="mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Globe className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-medium text-zinc-400">Available Languages</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {/* Show English first if available */}
+                  {availableLanguages.includes('en') && (
+                    <span className="px-2 py-1 text-xs font-medium bg-emerald-500/20 text-emerald-400 rounded-md flex items-center gap-1.5">
+                      {LANGUAGES.en}
+                      <span className="text-[10px] bg-emerald-500/30 px-1 rounded">Primary</span>
+                    </span>
+                  )}
+                  {/* Other languages sorted alphabetically */}
+                  {availableLanguages
+                    .filter(l => l !== 'en')
+                    .sort((a, b) => (LANGUAGES[a] || a).localeCompare(LANGUAGES[b] || b))
+                    .map(lang => (
+                      <span 
+                        key={lang}
+                        className="px-2 py-1 text-xs bg-zinc-800 text-zinc-400 rounded-md"
+                      >
+                        {LANGUAGES[lang] || lang.toUpperCase()}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Genres */}
             {genres.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {genres.slice(0, 5).map(g => (
+                {genres.slice(0, 8).map(g => (
                   <span 
                     key={g} 
                     className="px-2 py-1 text-xs bg-zinc-800/60 text-zinc-300 rounded-md"
@@ -389,18 +539,23 @@ export default function MangaDetailPage() {
                     {g}
                   </span>
                 ))}
+                {genres.length > 8 && (
+                  <span className="px-2 py-1 text-xs bg-zinc-800/40 text-zinc-500 rounded-md">
+                    +{genres.length - 8} more
+                  </span>
+                )}
               </div>
             )}
 
-            {/* Description - Collapsible */}
+            {/* Description */}
             {manga.description && (
-              <details className="mb-4 group">
-                <summary className="text-sm text-zinc-500 cursor-pointer hover:text-zinc-300 flex items-center gap-1.5 select-none">
+              <details className="mb-4 group" open>
+                <summary className="text-sm text-zinc-400 cursor-pointer hover:text-zinc-300 flex items-center gap-1.5 select-none font-medium">
                   <Info className="w-4 h-4" />
                   <span>Synopsis</span>
                   <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
                 </summary>
-                <p className="text-sm text-zinc-400 leading-relaxed mt-2 pl-5">
+                <p className="text-sm text-zinc-400 leading-relaxed mt-2 whitespace-pre-line">
                   {manga.description}
                 </p>
               </details>
@@ -489,6 +644,7 @@ export default function MangaDetailPage() {
                       chapter={ch} 
                       mangaId={id} 
                       isLongStrip={manga.isLongStrip}
+                      onNavigate={handleChapterNavigate}
                     />
                   ))}
                 </div>
