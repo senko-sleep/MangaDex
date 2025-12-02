@@ -227,8 +227,8 @@ export class NHentaiScraper extends BaseScraper {
       while ((match = thumbRegex.exec(html)) !== null) {
         const pageNum = parseInt(match[1]);
         const thumbUrl = match[2];
-        // Convert thumbnail to full image: 1t.jpg -> 1.jpg
-        const fullUrl = thumbUrl.replace(/(\d+)t\.(jpg|png|gif|webp)$/, '$1.$2');
+        // Convert thumbnail to full image: 1t.jpg -> 1.webp (nhentai.xxx uses webp for full images)
+        const fullUrl = thumbUrl.replace(/(\d+)t\.(jpg|png|gif|webp)$/, '$1.webp');
         
         pages.push({ 
           page: pageNum, 
