@@ -218,40 +218,62 @@ export class NHentaiScraper extends BaseScraper {
     const galleryId = mangaId.replace('nhentai:', '');
     
     try {
-      // First, fetch the viewer page for page 1 to determine the actual image extension
-      const viewerUrl = `${this.baseUrl}/g/${galleryId}/1/`;
-      const viewerHtml = await this.fetchHtml(viewerUrl);
-      
-      // Extract the actual full image URL from the viewer page
-      let actualExt = 'jpg'; // default fallback
-      if (viewerHtml) {
-        const imgMatch = /https:\/\/i\d+\.nhentaimg\.com\/[^"]*\/1\.(jpg|png|gif|webp)/i.exec(viewerHtml);
-        if (imgMatch) {
-          actualExt = imgMatch[1];
-        }
-      }
-      
-      // Now fetch the gallery page to get all thumbnails
       const url = `${this.baseUrl}/g/${galleryId}/`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
       
       const pages = [];
-      // Parse thumbnail links and convert to full image URLs
-      const thumbRegex = /<a[^>]*href="\/g\/\d+\/(\d+)\/"[^>]*><img[^>]*data-src="([^"]*)"[^>]*>/gi;
-      let match;
       
-      while ((match = thumbRegex.exec(html)) !== null) {
-        const pageNum = parseInt(match[1]);
-        const thumbUrl = match[2];
-        // Convert thumbnail to full image using the detected extension
-        const fullUrl = thumbUrl.replace(/(\d+)t\.(jpg|png|gif|webp)$/, `$1.${actualExt}`);
+      // nhentai.xxx embeds page data as JSON: var g_th = $.parseJSON('{"fl":{"1":"j,w,h",...},...}');
+      // "fl" = full images, format is "ext_code,width,height" where j=jpg, p=png, g=gif, w=webp
+      const jsonMatch = /var g_th = \$\.parseJSON\('(\{[^']+\})'\);/i.exec(html);
+      
+      if (jsonMatch) {
+        try {
+          const data = JSON.parse(jsonMatch[1]);
+          const fullImages = data.fl || {};
+          
+          // Get the image server from a thumbnail on the page
+          const serverMatch = /https:\/\/(i\d+\.nhentaimg\.com)\/(\d+)\/([^/]+)\//i.exec(html);
+          const server = serverMatch ? serverMatch[1] : 'i5.nhentaimg.com';
+          const prefix = serverMatch ? serverMatch[2] : '000';
+          const hash = serverMatch ? serverMatch[3] : '';
+          
+          const extMap = { j: 'jpg', p: 'png', g: 'gif', w: 'webp' };
+          
+          for (const [pageNum, info] of Object.entries(fullImages)) {
+            const [extCode] = info.split(',');
+            const ext = extMap[extCode] || 'jpg';
+            const fullUrl = `https://${server}/${prefix}/${hash}/${pageNum}.${ext}`;
+            
+            pages.push({
+              page: parseInt(pageNum),
+              url: this.proxyUrl(fullUrl),
+              originalUrl: fullUrl,
+            });
+          }
+        } catch (parseErr) {
+          console.error('[NHentai] JSON parse error:', parseErr.message);
+        }
+      }
+      
+      // Fallback to thumbnail scraping if JSON parsing failed
+      if (pages.length === 0) {
+        const thumbRegex = /<a[^>]*href="\/g\/\d+\/(\d+)\/"[^>]*><img[^>]*data-src="([^"]*)"[^>]*>/gi;
+        let match;
         
-        pages.push({ 
-          page: pageNum, 
-          url: this.proxyUrl(fullUrl),
-          originalUrl: fullUrl,
-        });
+        while ((match = thumbRegex.exec(html)) !== null) {
+          const pageNum = parseInt(match[1]);
+          const thumbUrl = match[2];
+          // Keep original extension from thumbnail
+          const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.');
+          
+          pages.push({ 
+            page: pageNum, 
+            url: this.proxyUrl(fullUrl),
+            originalUrl: fullUrl,
+          });
+        }
       }
 
       return pages.sort((a, b) => a.page - b.page);
