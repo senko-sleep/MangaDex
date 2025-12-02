@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 import { getCoverUrl } from '../lib/imageUtils';
+import Logo from '../components/Logo';
 
 // Save state before navigating to manga details
 const saveHomeState = (state) => {
@@ -460,10 +461,7 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 shrink-0">
-              <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center relative overflow-hidden">
-                <BookOpen className="w-5 h-5 text-white" />
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-orange-300 rounded-full opacity-60" />
-              </div>
+              <Logo size={36} />
               <span className="text-xl font-bold hidden sm:block">
                 <span className="text-gradient">Manga</span>
                 <span className="text-white">Fox</span>

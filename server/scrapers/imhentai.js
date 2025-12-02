@@ -215,10 +215,41 @@ export class IMHentaiScraper extends BaseScraper {
       const totalPages = parseInt($('#load_pages').val()) || 0;
       
       if (server && dir && loadId && totalPages > 0) {
-        // Get extension from first thumbnail
+        // Detect correct extension by checking first image
+        // Thumbnails always use .jpg but full images can be .jpg or .webp
+        let ext = 'jpg';
+        
+        // Try to detect from first thumbnail's actual full image
         const firstThumb = $('.gthumb img').first().attr('data-src') || '';
-        const extMatch = firstThumb.match(/\.(\w+)$/);
-        const ext = extMatch ? extMatch[1].replace('t', '') : 'jpg';
+        if (firstThumb) {
+          // Extract base URL pattern from thumbnail
+          const baseUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/1`;
+          
+          // Check if webp exists (most common for newer galleries)
+          try {
+            const testRes = await this.client.head(`${baseUrl}.webp`, {
+              headers: { 'Referer': 'https://imhentai.xxx/' }
+            });
+            if (testRes.status === 200) {
+              ext = 'webp';
+            }
+          } catch {
+            // webp doesn't exist, try jpg
+            try {
+              const testRes = await this.client.head(`${baseUrl}.jpg`, {
+                headers: { 'Referer': 'https://imhentai.xxx/' }
+              });
+              if (testRes.status === 200) {
+                ext = 'jpg';
+              }
+            } catch {
+              // Default to jpg if both fail
+              ext = 'jpg';
+            }
+          }
+        }
+        
+        console.log(`[IMHentai] Gallery ${gid}: Using extension .${ext}`);
         
         // Build all page URLs using the pattern
         for (let i = 1; i <= totalPages; i++) {

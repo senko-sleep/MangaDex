@@ -203,21 +203,49 @@ class TestIMHentaiScraper {
       const html = await this.fetchHtml(url);
       
       const pages = [];
-      // Parse thumbnail links and convert to full image URLs
-      const thumbRegex = /<div[^>]*class="[^"]*gthumb[^"]*"[^>]*>[\s\S]*?<img[^>]*data-src="([^"]*)"[^>]*>/gi;
-      let match;
-      let pageNum = 1;
       
-      while ((match = thumbRegex.exec(html)) !== null) {
-        const thumbUrl = match[1];
-        // Convert thumbnail to full image
-        const fullUrl = thumbUrl.replace(/\/t\//, '/').replace(/t\.(jpg|png|gif|webp)$/, '.$1');
+      // IMHentai embeds page info in hidden inputs:
+      // load_server, load_dir, load_id, load_pages
+      const serverMatch = html.match(/id=['"]load_server['"][^>]*value=['"]([^'"]*)['"]/i);
+      const dirMatch = html.match(/id=['"]load_dir['"][^>]*value=['"]([^'"]*)['"]/i);
+      const loadIdMatch = html.match(/id=['"]load_id['"][^>]*value=['"]([^'"]*)['"]/i);
+      const pagesMatch = html.match(/id=['"]load_pages['"][^>]*value=['"]([^'"]*)['"]/i);
+      
+      const server = serverMatch ? serverMatch[1] : null;
+      const dir = dirMatch ? dirMatch[1] : null;
+      const loadId = loadIdMatch ? loadIdMatch[1] : null;
+      const totalPages = pagesMatch ? parseInt(pagesMatch[1]) : 0;
+      
+      if (server && dir && loadId && totalPages > 0) {
+        // Build all page URLs using the pattern
+        // Note: Extension detection happens at proxy level with fallback
+        for (let i = 1; i <= totalPages; i++) {
+          const fullUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.jpg`;
+          pages.push({ 
+            page: i, 
+            url: `/api/proxy/image?url=${encodeURIComponent(fullUrl)}`,
+            originalUrl: fullUrl,
+          });
+        }
+      }
+      
+      // Fallback: Parse thumbnail links and convert to full image URLs
+      if (pages.length === 0) {
+        const thumbRegex = /class=['"][^'"]*gthumb[^'"]*['"][^>]*>[\s\S]*?<img[^>]*data-src=['"]([^'"]*)['"]/gi;
+        let match;
+        let pageNum = 1;
         
-        pages.push({ 
-          page: pageNum++, 
-          url: `/api/proxy/image?url=${encodeURIComponent(fullUrl)}`,
-          originalUrl: fullUrl,
-        });
+        while ((match = thumbRegex.exec(html)) !== null) {
+          const thumbUrl = match[1];
+          // Convert thumbnail to full image: 1t.jpg -> 1.jpg
+          const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.');
+          
+          pages.push({ 
+            page: pageNum++, 
+            url: `/api/proxy/image?url=${encodeURIComponent(fullUrl)}`,
+            originalUrl: fullUrl,
+          });
+        }
       }
 
       return pages;
@@ -338,6 +366,69 @@ const tests = [
     
     if (html.includes('Cloudflare') && html.includes('cf-browser-verification')) {
       throw new Error('Site appears to be blocked by Cloudflare');
+    }
+  }),
+
+  test('Can get chapter pages with correct URLs', async () => {
+    const source = new TestIMHentaiScraper();
+    
+    // Get a valid gallery ID from latest
+    const latest = await source.getLatest();
+    if (latest.length === 0) {
+      throw new Error('Could not get a gallery ID to test pages');
+    }
+    
+    const galleryId = latest[0].id;
+    console.log(`   Testing pages for gallery: ${galleryId}`);
+    
+    const pages = await source.getChapterPages(galleryId);
+    
+    if (!Array.isArray(pages)) {
+      throw new Error('Expected pages to be an array');
+    }
+    
+    console.log(`   Found ${pages.length} pages`);
+    
+    if (pages.length === 0) {
+      throw new Error('No pages found - parsing may have failed');
+    }
+    
+    // Verify first page URL is accessible
+    const firstPage = pages[0];
+    if (!firstPage.originalUrl) {
+      throw new Error('Page missing originalUrl');
+    }
+    
+    console.log(`   First page URL: ${firstPage.originalUrl}`);
+    
+    // Test if the image is accessible
+    const imgResponse = await fetch(firstPage.originalUrl, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://imhentai.xxx/'
+      }
+    });
+    
+    if (imgResponse.status === 404) {
+      // Try webp fallback
+      const webpUrl = firstPage.originalUrl.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp');
+      const webpResponse = await fetch(webpUrl, {
+        method: 'HEAD',
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': 'https://imhentai.xxx/'
+        }
+      });
+      
+      if (webpResponse.status !== 200) {
+        throw new Error(`Image not accessible: ${firstPage.originalUrl} (also tried .webp)`);
+      }
+      console.log(`   Image accessible (webp fallback worked)`);
+    } else if (imgResponse.status !== 200) {
+      throw new Error(`Image not accessible: status ${imgResponse.status}`);
+    } else {
+      console.log(`   Image accessible: status ${imgResponse.status}`);
     }
   })
 ];

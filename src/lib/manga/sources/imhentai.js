@@ -344,60 +344,58 @@ class IMHentaiSource extends BaseSource {
   parseGalleryPages(html, galleryId) {
     const pages = [];
     
-    // Extract image list from reader data or gallery thumbs
-    // IMHentai uses numbered images: 1.jpg, 2.jpg, etc.
+    // IMHentai embeds page info in hidden inputs:
+    // load_server, load_dir, load_id, load_pages
+    const serverMatch = /id=['"]load_server['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
+    const dirMatch = /id=['"]load_dir['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
+    const loadIdMatch = /id=['"]load_id['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
+    const pagesMatch = /id=['"]load_pages['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
     
-    // Method 1: Parse from reader script
-    const readerMatch = /var\s+g_th\s*=\s*({[\s\S]*?});/i.exec(html);
-    if (readerMatch) {
-      try {
-        const thumbData = JSON.parse(readerMatch[1].replace(/'/g, '"'));
-        const serverMatch = /dir\s*:\s*['"]([^'"]+)['"]/i.exec(html);
-        const server = serverMatch ? serverMatch[1] : this.imageServer;
-        
-        Object.keys(thumbData).forEach((key, index) => {
-          const ext = thumbData[key]?.split('.').pop() || 'jpg';
-          pages.push({
-            index: index + 1,
-            url: `${server}/${galleryId}/${index + 1}.${ext}`
-          });
-        });
-      } catch (e) {
-        // Continue to fallback
-      }
-    }
+    const server = serverMatch ? serverMatch[1] : null;
+    const dir = dirMatch ? dirMatch[1] : null;
+    const loadId = loadIdMatch ? loadIdMatch[1] : null;
+    const totalPages = pagesMatch ? parseInt(pagesMatch[1]) : 0;
     
-    // Method 2: Parse from thumbnail list
-    if (pages.length === 0) {
-      const thumbRegex = /<div[^>]*class="[^"]*thumb[^"]*"[^>]*>[\s\S]*?<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/gi;
-      let thumbMatch;
-      let pageNum = 1;
+    if (server && dir && loadId && totalPages > 0) {
+      // Extract extension from first thumbnail
+      // Note: Thumbnails use .jpg but full images may be .webp
+      // We'll use .jpg as default and let the proxy handle fallback
+      const thumbMatch = /class=['"][^'"]*gthumb[^'"]*['"][^>]*>[\s\S]*?<img[^>]*data-src=['"]([^'"]*)['"]/i.exec(html);
+      let ext = 'jpg';
       
-      while ((thumbMatch = thumbRegex.exec(html)) !== null) {
-        const thumbUrl = thumbMatch[1];
-        // Convert thumbnail to full image URL
-        const fullUrl = thumbUrl
-          .replace('/t/', '/')
-          .replace(/t\.(jpg|png|gif|webp)/, '.$1');
-        
+      // Check if thumbnail indicates webp (some galleries use webp thumbnails)
+      if (thumbMatch && thumbMatch[1]) {
+        const thumbExt = thumbMatch[1].match(/\.(\w+)$/);
+        if (thumbExt && thumbExt[1] === 'webp') {
+          ext = 'webp';
+        }
+      }
+      
+      // Build all page URLs using the pattern
+      for (let i = 1; i <= totalPages; i++) {
+        const fullUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`;
         pages.push({
-          index: pageNum++,
+          index: i,
           url: fullUrl
         });
       }
     }
     
-    // Method 3: Extract page count and build URLs
+    // Fallback: Parse from thumbnail list
     if (pages.length === 0) {
-      const pagesMatch = /(\d+)\s*Pages/i.exec(html);
-      if (pagesMatch) {
-        const pageCount = parseInt(pagesMatch[1]);
-        for (let i = 1; i <= pageCount; i++) {
-          pages.push({
-            index: i,
-            url: `${this.imageServer}/${galleryId}/${i}.jpg`
-          });
-        }
+      const thumbRegex = /class=['"][^'"]*gthumb[^'"]*['"][^>]*>[\s\S]*?<img[^>]*data-src=['"]([^'"]*)['"]/gi;
+      let thumbMatch;
+      let pageNum = 1;
+      
+      while ((thumbMatch = thumbRegex.exec(html)) !== null) {
+        const thumbUrl = thumbMatch[1];
+        // Convert thumbnail to full image URL: 1t.jpg -> 1.jpg
+        const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.');
+        
+        pages.push({
+          index: pageNum++,
+          url: fullUrl
+        });
       }
     }
     

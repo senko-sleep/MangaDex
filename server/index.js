@@ -86,15 +86,36 @@ app.get('/api/proxy/image', async (req, res) => {
     const referer = getRefererForUrl(imageUrl);
 
     // Fetch with proper headers to bypass hotlink protection
-    const response = await fetch(imageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': referer,
-        'Origin': referer.replace(/\/$/, ''),
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-    });
+    const fetchHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': referer,
+      'Origin': referer.replace(/\/$/, ''),
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+    
+    let response = await fetch(imageUrl, { headers: fetchHeaders });
+    let finalUrl = imageUrl;
+
+    // If 404, try alternative extensions (for IMHentai which uses .webp or .jpg)
+    if (response.status === 404 && imageUrl.includes('imhentai')) {
+      const extensions = ['.webp', '.jpg', '.png', '.gif'];
+      const currentExt = imageUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)?.[0] || '';
+      
+      for (const ext of extensions) {
+        if (ext === currentExt.toLowerCase()) continue;
+        
+        const altUrl = imageUrl.replace(/\.(jpg|jpeg|png|gif|webp)$/i, ext);
+        const altResponse = await fetch(altUrl, { headers: fetchHeaders });
+        
+        if (altResponse.ok) {
+          response = altResponse;
+          finalUrl = altUrl;
+          log.info('Image proxy fallback succeeded', { original: imageUrl.substring(0, 80), fallback: ext });
+          break;
+        }
+      }
+    }
 
     if (!response.ok) {
       // Extract source from URL for better debugging
