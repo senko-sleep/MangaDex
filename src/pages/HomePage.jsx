@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, X, Eye, EyeOff, Sparkles, TrendingUp,
   BookOpen, Grid3X3, LayoutGrid, Shield, ShieldOff, ShieldAlert,
@@ -43,9 +43,11 @@ const clearSavedState = () => {
 // Manga Card Component
 function MangaCard({ manga, index, onNavigate }) {
   const cover = getCoverUrl(manga);
+  const sourceId = manga.sourceId || manga.id?.split(':')[0];
   return (
     <Link 
-      to={`/manga/${encodeURIComponent(manga.id)}`} 
+      to={`/manga/${encodeURIComponent(manga.id)}`}
+      state={{ sourceId }}
       className="group relative fade-in"
       style={{ animationDelay: `${Math.min(index, 20) * 20}ms` }}
       onClick={onNavigate}
@@ -108,9 +110,11 @@ function MangaCard({ manga, index, onNavigate }) {
 // Section Card for horizontal scrolling sections
 function SectionCard({ manga, onNavigate }) {
   const cover = getCoverUrl(manga);
+  const sourceId = manga.sourceId || manga.id?.split(':')[0];
   return (
     <Link 
       to={`/manga/${encodeURIComponent(manga.id)}`}
+      state={{ sourceId }}
       className="relative flex-shrink-0 w-[260px] md:w-[300px] group"
       onClick={onNavigate}
     >
@@ -152,10 +156,15 @@ function MangaSkeleton() {
 }
 
 export default function HomePage() {
+  const location = useLocation();
+  
   // Get saved state for restoration (only on initial mount)
   const savedStateRef = useRef(getSavedState());
   const savedState = savedStateRef.current;
   const shouldSkipInitialFetch = useRef(!!savedState?.manga?.length);
+  
+  // Check if we're navigating back from manga details with a source filter
+  const filterSourceFromNav = location.state?.filterSource;
   
   const [manga, setManga] = useState(savedState?.manga || []);
   const [newManga, setNewManga] = useState([]);
@@ -247,6 +256,18 @@ export default function HomePage() {
       setAdultTags(d.adultTags || []);
     }).catch(() => {});
   }, [showAdult]);
+  
+  // Handle source filter from navigation (when coming back from manga details)
+  useEffect(() => {
+    if (filterSourceFromNav && !savedState?.selectedSources?.length) {
+      // Only apply the filter if we don't have saved state with sources
+      // This ensures clicking "Browse" takes you to that source's content
+      setSelectedSources([filterSourceFromNav]);
+      // Clear the navigation state to prevent re-applying on refresh
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSourceFromNav]);
 
   const buildUrl = useCallback((p = 1) => {
     const params = new URLSearchParams();

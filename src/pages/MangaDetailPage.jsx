@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Search, BookOpen, Play, ChevronDown, SortAsc, SortDesc,
   Heart, Share2, BookMarked, Globe, Info, ArrowLeft
@@ -101,6 +101,7 @@ function DetailSkeleton() {
 export default function MangaDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [manga, setManga] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -302,9 +303,11 @@ export default function MangaDetailPage() {
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <button 
               onClick={() => {
-                // Use browser back if we have history, otherwise navigate to home
-                if (window.history.length > 1) {
-                  navigate(-1);
+                // Navigate to home with the source that this manga came from
+                // This ensures the user goes back to browsing the same source
+                const navSourceId = location.state?.sourceId || sourceId;
+                if (navSourceId) {
+                  navigate('/', { state: { filterSource: navSourceId } });
                 } else {
                   navigate('/');
                 }
