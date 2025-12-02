@@ -218,7 +218,20 @@ export class NHentaiScraper extends BaseScraper {
     const galleryId = mangaId.replace('nhentai:', '');
     
     try {
-      // Use HTML scraping for nhentai.xxx
+      // First, fetch the viewer page for page 1 to determine the actual image extension
+      const viewerUrl = `${this.baseUrl}/g/${galleryId}/1/`;
+      const viewerHtml = await this.fetchHtml(viewerUrl);
+      
+      // Extract the actual full image URL from the viewer page
+      let actualExt = 'jpg'; // default fallback
+      if (viewerHtml) {
+        const imgMatch = /https:\/\/i\d+\.nhentaimg\.com\/[^"]*\/1\.(jpg|png|gif|webp)/i.exec(viewerHtml);
+        if (imgMatch) {
+          actualExt = imgMatch[1];
+        }
+      }
+      
+      // Now fetch the gallery page to get all thumbnails
       const url = `${this.baseUrl}/g/${galleryId}/`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
@@ -231,8 +244,8 @@ export class NHentaiScraper extends BaseScraper {
       while ((match = thumbRegex.exec(html)) !== null) {
         const pageNum = parseInt(match[1]);
         const thumbUrl = match[2];
-        // Convert thumbnail to full image: 1t.jpg -> 1.webp (nhentai.xxx uses webp for full images)
-        const fullUrl = thumbUrl.replace(/(\d+)t\.(jpg|png|gif|webp)$/, '$1.webp');
+        // Convert thumbnail to full image using the detected extension
+        const fullUrl = thumbUrl.replace(/(\d+)t\.(jpg|png|gif|webp)$/, `$1.${actualExt}`);
         
         pages.push({ 
           page: pageNum, 
