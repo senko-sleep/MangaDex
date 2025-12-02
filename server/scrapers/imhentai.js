@@ -136,7 +136,8 @@ export class IMHentaiScraper extends BaseScraper {
       if (!$) return null;
       
       const title = $('h1').first().text().trim();
-      const cover = $('.cover img').attr('data-src') || $('.cover img').attr('src');
+      // Cover is in .left_cover div, not .cover
+      const cover = $('.left_cover img').attr('data-src') || $('.left_cover img').attr('src');
       
       // Parse tags
       const tags = [];
