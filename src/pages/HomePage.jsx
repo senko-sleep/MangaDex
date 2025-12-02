@@ -259,10 +259,16 @@ export default function HomePage() {
   
   // Handle source filter from navigation (when coming back from manga details)
   useEffect(() => {
-    if (filterSourceFromNav && !savedState?.selectedSources?.length) {
-      // Only apply the filter if we don't have saved state with sources
-      // This ensures clicking "Browse" takes you to that source's content
-      setSelectedSources([filterSourceFromNav]);
+    if (filterSourceFromNav) {
+      // Check if the source matches what we had saved - if so, keep the saved state
+      const savedSourceMatches = savedState?.selectedSources?.length === 1 && 
+                                  savedState.selectedSources[0] === filterSourceFromNav;
+      
+      if (!savedSourceMatches) {
+        // Source is different or no saved state - apply the new filter
+        // This will trigger a re-fetch with the new source
+        setSelectedSources([filterSourceFromNav]);
+      }
       // Clear the navigation state to prevent re-applying on refresh
       window.history.replaceState({}, document.title);
     }
@@ -384,43 +390,50 @@ export default function HomePage() {
 
   // Track if scroll has been restored to prevent multiple attempts
   const hasRestoredScroll = useRef(false);
+  const pendingScrollRestore = useRef(null);
   
   // Restore scroll position when returning from manga details
   useEffect(() => {
-    // Only attempt restoration once per mount when we have content
-    if (hasRestoredScroll.current || manga.length === 0) return;
-    
+    // Check for saved scroll position on mount
     const savedPosition = sessionStorage.getItem('homeScrollPosition');
-    if (!savedPosition) return;
-    
-    const scrollY = parseInt(savedPosition, 10);
-    if (scrollY <= 0) {
-      clearSavedState();
-      return;
+    if (savedPosition) {
+      const scrollY = parseInt(savedPosition, 10);
+      if (scrollY > 0) {
+        pendingScrollRestore.current = scrollY;
+      }
     }
+  }, []);
+  
+  // Actually restore scroll when we have content
+  useEffect(() => {
+    // Only attempt restoration once per mount when we have content
+    if (hasRestoredScroll.current || manga.length === 0 || !pendingScrollRestore.current) return;
+    
+    const scrollY = pendingScrollRestore.current;
     
     // Mark as restored immediately to prevent re-runs
     hasRestoredScroll.current = true;
+    pendingScrollRestore.current = null;
     
     // Function to attempt scroll restoration
     const attemptScroll = (attempts = 0) => {
       // Check if document is tall enough to scroll to the saved position
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       
-      if (scrollY <= maxScroll || attempts >= 10) {
+      if (scrollY <= maxScroll || attempts >= 15) {
         // Can scroll to position or max attempts reached
         window.scrollTo({ top: Math.min(scrollY, maxScroll), behavior: 'instant' });
         clearSavedState();
       } else {
         // Document not tall enough yet, wait for more content to load
         requestAnimationFrame(() => {
-          setTimeout(() => attemptScroll(attempts + 1), 50);
+          setTimeout(() => attemptScroll(attempts + 1), 100);
         });
       }
     };
     
     // Start attempting scroll after a brief delay for initial render
-    const timeoutId = setTimeout(() => attemptScroll(), 50);
+    const timeoutId = setTimeout(() => attemptScroll(), 100);
     
     return () => clearTimeout(timeoutId);
   }, [manga.length]);
