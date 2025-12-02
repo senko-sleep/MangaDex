@@ -228,13 +228,13 @@ export class EHentaiScraper extends BaseScraper {
       
       console.log(`[E-Hentai] Found ${pageLinks.length} page links across ${currentPage} pages`);
       
-      // Fetch actual image URLs from each page (limit to first 200 pages)
-      const limitedLinks = pageLinks.slice(0, 200);
+      // Fetch actual image URLs from each page (limit to first 500 pages)
+      const limitedLinks = pageLinks.slice(0, 500);
       const pages = [];
       
-      // Fetch pages in batches of 5 to avoid overwhelming the server
-      for (let i = 0; i < limitedLinks.length; i += 5) {
-        const batch = limitedLinks.slice(i, i + 5);
+      // Fetch pages in batches of 50 for faster loading
+      for (let i = 0; i < limitedLinks.length; i += 50) {
+        const batch = limitedLinks.slice(i, i + 50);
         const batchResults = await Promise.all(
           batch.map(async (pageUrl, batchIdx) => {
             try {
@@ -258,11 +258,6 @@ export class EHentaiScraper extends BaseScraper {
         );
         
         pages.push(...batchResults.filter(Boolean));
-        
-        // Small delay between batches
-        if (i + 5 < limitedLinks.length) {
-          await new Promise(r => setTimeout(r, 100));
-        }
       }
       
       console.log(`[E-Hentai] Loaded ${pages.length} image URLs`);
