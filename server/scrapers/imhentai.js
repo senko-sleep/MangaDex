@@ -1,14 +1,39 @@
 import BaseScraper from './base.js';
 
+// API base URL for proxy (set via environment variable in production)
+const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+
 // IMHentai - Adult content
 export class IMHentaiScraper extends BaseScraper {
   constructor() {
     super('IMHentai', 'https://imhentai.xxx', true);
   }
 
-  async search(query, page = 1) {
+  // Helper to create proxy URL - returns absolute URL for cross-origin access
+  proxyUrl(url) {
+    if (!url) return '';
+    const base = API_BASE || '';
+    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
+  }
+
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
     try {
-      const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(query)}&page=${page}`;
+      // Build search query - IMHentai supports tag search in query
+      let searchQuery = query || '';
+      
+      // Add tags to search query if provided
+      if (tags && tags.length > 0) {
+        searchQuery += ' ' + tags.join(' ');
+      }
+      
+      searchQuery = searchQuery.trim();
+      
+      // If no query at all, return popular instead
+      if (!searchQuery) {
+        return this.getPopular(page);
+      }
+      
+      const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
       return this.parseGalleryList($);
@@ -43,39 +68,44 @@ export class IMHentaiScraper extends BaseScraper {
   parseGalleryList($) {
     const results = [];
     
-    // IMHentai gallery list
-    $('.thumb, .gallery').each((_, el) => {
+    // IMHentai gallery list - uses div.thumb containers
+    $('.thumb').each((_, el) => {
       const $el = $(el);
       
-      // Get gallery link
-      const link = $el.find('a').first();
+      // Get gallery link from inner_thumb > a
+      const link = $el.find('.inner_thumb a, a[href*="/gallery/"]').first();
       const href = link.attr('href') || '';
       const match = href.match(/\/gallery\/(\d+)/);
       
       if (!match) return;
       
       const gid = match[1];
-      const title = $el.find('.caption, .title, h2').text().trim() || link.attr('title') || '';
       
-      // Get cover
-      let cover = $el.find('img').first().attr('data-src') || 
-                  $el.find('img').first().attr('src') ||
-                  $el.find('.lazy').attr('data-src');
+      // Get title from gallery_title h2 > a or img alt
+      const title = $el.find('.gallery_title a').text().trim() || 
+                    $el.find('img').attr('alt') ||
+                    link.attr('title') || 
+                    `Gallery ${gid}`;
+      
+      // Get cover from lazy-loaded img
+      let cover = $el.find('img.lazy').attr('data-src') || 
+                  $el.find('img').attr('data-src') ||
+                  $el.find('img').attr('src');
       
       if (cover && !cover.startsWith('http')) {
         cover = `https://imhentai.xxx${cover}`;
       }
       
-      // Get category/type from class or text
-      const category = $el.find('.type, .category').text().trim().toLowerCase() || 'doujinshi';
+      // Get category from thumb_cat
+      const category = $el.find('.thumb_cat').text().trim().toLowerCase() || 'doujinshi';
       
-      if (gid && title) {
+      if (gid) {
         results.push({
           id: `imhentai:${gid}`,
           sourceId: 'imhentai',
           slug: gid,
           title,
-          cover: cover ? `/api/proxy/image?url=${encodeURIComponent(cover)}` : null,
+          cover: this.proxyUrl(cover),
           category,
           isAdult: true,
           contentType: this.mapCategory(category),
@@ -139,7 +169,7 @@ export class IMHentaiScraper extends BaseScraper {
         sourceId: 'imhentai',
         slug: gid,
         title,
-        cover: cover ? `/api/proxy/image?url=${encodeURIComponent(cover)}` : null,
+        cover: this.proxyUrl(cover),
         tags,
         artists,
         groups,
@@ -176,71 +206,57 @@ export class IMHentaiScraper extends BaseScraper {
       
       const pages = [];
       
-      // IMHentai stores image info in a script tag or data attributes
-      // Try multiple selectors for thumbnails
-      const thumbSelectors = [
-        '.gthumb img',
-        '.thumb img', 
-        '.gallery_thumb img',
-        '.thumbs img',
-        '.lazy',
-        'img[data-src]'
-      ];
-      
-      let foundThumbs = false;
-      for (const selector of thumbSelectors) {
-        $(selector).each((i, el) => {
-          let src = $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('src') || '';
-          
-          // Skip non-image sources
-          if (!src || src.includes('logo') || src.includes('icon') || src.includes('avatar')) return;
-          
-          // Convert thumbnail to full image
-          // Patterns: 1t.jpg -> 1.jpg, 001t.webp -> 001.webp
-          if (src.includes('t.')) {
-            src = src.replace(/(\d+)t\./, '$1.');
-          }
-          
-          // Ensure full URL
-          if (src.startsWith('//')) {
-            src = 'https:' + src;
-          } else if (src.startsWith('/')) {
-            src = this.baseUrl + src;
-          }
-          
-          if (src.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
-            pages.push({
-              page: pages.length + 1,
-              url: `/api/proxy/image?url=${encodeURIComponent(src)}`,
-              originalUrl: src
-            });
-            foundThumbs = true;
-          }
-        });
+      // IMHentai uses .gthumb divs with lazy-loaded images
+      // Format: <div class="gthumb"><a href="/view/ID/PAGE/"><img data-src="URL" /></a></div>
+      $('.gthumb').each((i, el) => {
+        const $el = $(el);
+        let src = $el.find('img').attr('data-src') || $el.find('img').attr('src') || '';
         
-        if (foundThumbs) break;
-      }
+        // Skip empty or non-gallery images
+        if (!src || src.includes('svg') || src.includes('logo')) return;
+        
+        // Convert thumbnail to full image: 1t.jpg -> 1.jpg
+        if (src.match(/\d+t\.(jpg|png|gif|webp)/i)) {
+          src = src.replace(/(\d+)t\./, '$1.');
+        }
+        
+        // Ensure full URL
+        if (src.startsWith('//')) {
+          src = 'https:' + src;
+        } else if (src.startsWith('/')) {
+          src = this.baseUrl + src;
+        }
+        
+        if (src.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+          pages.push({
+            page: pages.length + 1,
+            url: this.proxyUrl(src),
+            originalUrl: src
+          });
+        }
+      });
       
-      // Alternative: try to find image viewer page and extract from there
+      // Fallback: try viewer page if no thumbnails found
       if (pages.length === 0) {
         const viewerUrl = `${this.baseUrl}/view/${gid}/1/`;
         const viewer$ = await this.fetch(viewerUrl);
         if (viewer$) {
           // Get total pages from viewer
-          const pageInfo = viewer$('.total_pages, .page_num').text();
+          const pageInfo = viewer$('.total_pages, .page_num, li.pages').text();
           const totalMatch = pageInfo.match(/(\d+)/);
           const totalPages = totalMatch ? parseInt(totalMatch[1]) : 1;
           
           // Get image from viewer
-          const imgSrc = viewer$('#gimg, #img, .gimg img').attr('src');
+          const imgSrc = viewer$('#gimg, #img, .gimg img, img.lazy').attr('src') || 
+                         viewer$('#gimg, #img, .gimg img, img.lazy').attr('data-src');
           if (imgSrc) {
             // Build URLs for all pages based on pattern
             const basePattern = imgSrc.replace(/\/\d+\./, '/PAGE.');
             for (let i = 1; i <= Math.min(totalPages, 200); i++) {
-              const pageUrl = basePattern.replace('PAGE', i);
+              const pageUrl = basePattern.replace('PAGE', String(i));
               pages.push({
                 page: i,
-                url: `/api/proxy/image?url=${encodeURIComponent(pageUrl)}`,
+                url: this.proxyUrl(pageUrl),
                 originalUrl: pageUrl
               });
             }

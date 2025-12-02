@@ -1,11 +1,21 @@
 import BaseScraper from './base.js';
 
+// API base URL for proxy (set via environment variable in production)
+const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+
 // NHentai - Adult content - Using nhentai.xxx mirror (nhentai.net has Cloudflare)
 export class NHentaiScraper extends BaseScraper {
   constructor() {
     // Using nhentai.xxx mirror - nhentai.net API is blocked by Cloudflare
     super('NHentai', 'https://nhentai.xxx', true);
     this.imageServer = 'https://i5.nhentaimg.com';
+  }
+
+  // Helper to create proxy URL - returns absolute URL for cross-origin access
+  proxyUrl(url) {
+    if (!url) return '';
+    const base = API_BASE || '';
+    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
   async fetchHtml(url) {
@@ -51,9 +61,29 @@ export class NHentaiScraper extends BaseScraper {
     return results;
   }
 
-  async search(query, page = 1) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
     try {
-      const url = `${this.baseUrl}/search/?q=${encodeURIComponent(query)}&page=${page}`;
+      // Build search query - nhentai.xxx supports tag search in query
+      let searchQuery = query || '';
+      
+      // Add tags to search query if provided
+      if (tags && tags.length > 0) {
+        searchQuery += ' ' + tags.join(' ');
+      }
+      
+      // Add excluded tags with minus prefix
+      if (excludeTags && excludeTags.length > 0) {
+        searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+      }
+      
+      searchQuery = searchQuery.trim();
+      
+      // If no query at all, return popular instead
+      if (!searchQuery) {
+        return this.getPopular(page);
+      }
+      
+      const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery)}&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html);
@@ -93,7 +123,7 @@ export class NHentaiScraper extends BaseScraper {
       sourceId: 'nhentai',
       slug: String(id),
       title,
-      cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : '',
+      cover: this.proxyUrl(coverUrl),
       author: 'Unknown',
       tags: [],
       pages: 0,
@@ -155,7 +185,7 @@ export class NHentaiScraper extends BaseScraper {
         sourceId: 'nhentai',
         slug: galleryId,
         title,
-        cover: cover ? `/api/proxy/image?url=${encodeURIComponent(cover)}` : '',
+        cover: this.proxyUrl(cover),
         tags,
         artists: artist !== 'Unknown' ? [artist] : [],
         pageCount,
@@ -202,7 +232,7 @@ export class NHentaiScraper extends BaseScraper {
         
         pages.push({ 
           page: pageNum, 
-          url: `/api/proxy/image?url=${encodeURIComponent(fullUrl)}`,
+          url: this.proxyUrl(fullUrl),
           originalUrl: fullUrl,
         });
       }
