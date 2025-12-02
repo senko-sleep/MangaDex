@@ -38,20 +38,23 @@ export class NHentaiScraper extends BaseScraper {
     const results = [];
     // Match gallery_item containers for nhentai.xxx
     const galleryRegex = /<div[^>]*class="gallery_item"[^>]*>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/gi;
-    const linkRegex = /<a[^>]*href="\/g\/(\d+)\/"[^>]*(?:title="([^"]*)")?/i;
+    const linkRegex = /<a[^>]*href="\/g\/(\d+)\/"/i;
+    const titleRegex = /title="([^"]*)"/i;
     const imgRegex = /<img[^>]*data-src="([^"]*)"[^>]*>/i;
-    const captionRegex = /<div[^>]*class="caption"[^>]*>([^<]*)<\/div>/i;
+    const captionRegex = /<div[^>]*class="caption"[^>]*>([\s\S]*?)<\/div>/i;
     
     let match;
     while ((match = galleryRegex.exec(html)) !== null) {
       const content = match[1];
       const linkMatch = linkRegex.exec(content);
+      const titleMatch = titleRegex.exec(content);
       const imgMatch = imgRegex.exec(content);
       const captionMatch = captionRegex.exec(content);
       
       if (linkMatch) {
         const id = linkMatch[1];
-        let title = linkMatch[2] || (captionMatch ? captionMatch[1] : `Gallery ${id}`);
+        // Prefer title attribute, then caption text
+        let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
         title = this.decodeHtml(title.trim());
         const coverUrl = imgMatch ? imgMatch[1] : '';
         
@@ -83,7 +86,8 @@ export class NHentaiScraper extends BaseScraper {
         return this.getPopular(page);
       }
       
-      const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery)}&page=${page}`;
+      // nhentai.xxx uses 'key' parameter, not 'q'
+      const url = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html);
