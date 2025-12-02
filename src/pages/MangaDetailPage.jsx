@@ -301,7 +301,14 @@ export default function MangaDetailPage() {
         <header className="absolute top-0 left-0 right-0 z-20">
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <button 
-              onClick={() => navigate('/')}
+              onClick={() => {
+                // Use browser back if we have history, otherwise navigate to home
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate('/');
+                }
+              }}
               className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors flex items-center gap-2"
             >
               <ArrowLeft className="w-5 h-5" />

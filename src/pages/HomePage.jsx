@@ -380,11 +380,25 @@ export default function HomePage() {
     // Mark as restored immediately to prevent re-runs
     hasRestoredScroll.current = true;
     
-    // Use setTimeout to ensure DOM is fully painted with all manga cards
-    const timeoutId = setTimeout(() => {
-      window.scrollTo({ top: scrollY, behavior: 'instant' });
-      clearSavedState();
-    }, 100);
+    // Function to attempt scroll restoration
+    const attemptScroll = (attempts = 0) => {
+      // Check if document is tall enough to scroll to the saved position
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      
+      if (scrollY <= maxScroll || attempts >= 10) {
+        // Can scroll to position or max attempts reached
+        window.scrollTo({ top: Math.min(scrollY, maxScroll), behavior: 'instant' });
+        clearSavedState();
+      } else {
+        // Document not tall enough yet, wait for more content to load
+        requestAnimationFrame(() => {
+          setTimeout(() => attemptScroll(attempts + 1), 50);
+        });
+      }
+    };
+    
+    // Start attempting scroll after a brief delay for initial render
+    const timeoutId = setTimeout(() => attemptScroll(), 50);
     
     return () => clearTimeout(timeoutId);
   }, [manga.length]);
