@@ -207,62 +207,57 @@ export class IMHentaiScraper extends BaseScraper {
       
       const pages = [];
       
-      // IMHentai uses .gthumb divs with lazy-loaded images
-      // Format: <div class="gthumb"><a href="/view/ID/PAGE/"><img data-src="URL" /></a></div>
-      $('.gthumb').each((i, el) => {
-        const $el = $(el);
-        let src = $el.find('img').attr('data-src') || $el.find('img').attr('src') || '';
+      // IMHentai embeds page info in hidden inputs:
+      // load_server, load_dir, load_id, load_pages
+      const server = $('#load_server').val();
+      const dir = $('#load_dir').val();
+      const loadId = $('#load_id').val();
+      const totalPages = parseInt($('#load_pages').val()) || 0;
+      
+      if (server && dir && loadId && totalPages > 0) {
+        // Get extension from first thumbnail
+        const firstThumb = $('.gthumb img').first().attr('data-src') || '';
+        const extMatch = firstThumb.match(/\.(\w+)$/);
+        const ext = extMatch ? extMatch[1].replace('t', '') : 'jpg';
         
-        // Skip empty or non-gallery images
-        if (!src || src.includes('svg') || src.includes('logo')) return;
-        
-        // Convert thumbnail to full image: 1t.jpg -> 1.jpg
-        if (src.match(/\d+t\.(jpg|png|gif|webp)/i)) {
-          src = src.replace(/(\d+)t\./, '$1.');
-        }
-        
-        // Ensure full URL
-        if (src.startsWith('//')) {
-          src = 'https:' + src;
-        } else if (src.startsWith('/')) {
-          src = this.baseUrl + src;
-        }
-        
-        if (src.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+        // Build all page URLs using the pattern
+        for (let i = 1; i <= totalPages; i++) {
+          const fullUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`;
           pages.push({
-            page: pages.length + 1,
-            url: this.proxyUrl(src),
-            originalUrl: src
+            page: i,
+            url: this.proxyUrl(fullUrl),
+            originalUrl: fullUrl
           });
         }
-      });
+      }
       
-      // Fallback: try viewer page if no thumbnails found
+      // Fallback to thumbnail scraping if hidden inputs not found
       if (pages.length === 0) {
-        const viewerUrl = `${this.baseUrl}/view/${gid}/1/`;
-        const viewer$ = await this.fetch(viewerUrl);
-        if (viewer$) {
-          // Get total pages from viewer
-          const pageInfo = viewer$('.total_pages, .page_num, li.pages').text();
-          const totalMatch = pageInfo.match(/(\d+)/);
-          const totalPages = totalMatch ? parseInt(totalMatch[1]) : 1;
+        $('.gthumb').each((i, el) => {
+          const $el = $(el);
+          let src = $el.find('img').attr('data-src') || $el.find('img').attr('src') || '';
           
-          // Get image from viewer
-          const imgSrc = viewer$('#gimg, #img, .gimg img, img.lazy').attr('src') || 
-                         viewer$('#gimg, #img, .gimg img, img.lazy').attr('data-src');
-          if (imgSrc) {
-            // Build URLs for all pages based on pattern
-            const basePattern = imgSrc.replace(/\/\d+\./, '/PAGE.');
-            for (let i = 1; i <= Math.min(totalPages, 200); i++) {
-              const pageUrl = basePattern.replace('PAGE', String(i));
-              pages.push({
-                page: i,
-                url: this.proxyUrl(pageUrl),
-                originalUrl: pageUrl
-              });
-            }
+          if (!src || src.includes('svg') || src.includes('logo')) return;
+          
+          // Convert thumbnail to full image: 1t.jpg -> 1.jpg
+          if (src.match(/\d+t\.(jpg|png|gif|webp)/i)) {
+            src = src.replace(/(\d+)t\./, '$1.');
           }
-        }
+          
+          if (src.startsWith('//')) {
+            src = 'https:' + src;
+          } else if (src.startsWith('/')) {
+            src = this.baseUrl + src;
+          }
+          
+          if (src.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+            pages.push({
+              page: pages.length + 1,
+              url: this.proxyUrl(src),
+              originalUrl: src
+            });
+          }
+        });
       }
 
       console.log(`[IMHentai] Found ${pages.length} pages for gallery ${gid}`);

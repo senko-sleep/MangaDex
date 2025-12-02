@@ -192,24 +192,44 @@ export class EHentaiScraper extends BaseScraper {
     const [gid, token] = slug.split('_');
     
     try {
-      // Scrape gallery page for page links
-      const $ = await this.fetch(`${this.baseUrl}/g/${gid}/${token}/`);
-      if (!$) return [];
-      
       const pageLinks = [];
+      let currentPage = 0;
+      let hasMorePages = true;
       
-      // Get all page links (thumbnail links that lead to full image pages)
-      $('a[href*="/s/"]').each((_, el) => {
-        const href = $(el).attr('href');
-        if (href && !pageLinks.includes(href)) {
-          pageLinks.push(href);
+      // E-Hentai paginates gallery thumbnails with ?p=0, ?p=1, etc.
+      // Each page shows ~40 thumbnails
+      while (hasMorePages && currentPage < 10) { // Max 10 pages = ~400 images
+        const galleryUrl = `${this.baseUrl}/g/${gid}/${token}/?p=${currentPage}`;
+        const $ = await this.fetch(galleryUrl);
+        if (!$) break;
+        
+        const linksOnPage = [];
+        // Get all page links (thumbnail links that lead to full image pages)
+        $('a[href*="/s/"]').each((_, el) => {
+          const href = $(el).attr('href');
+          if (href && !pageLinks.includes(href)) {
+            linksOnPage.push(href);
+            pageLinks.push(href);
+          }
+        });
+        
+        // If no new links found, we've reached the end
+        if (linksOnPage.length === 0) {
+          hasMorePages = false;
+        } else {
+          currentPage++;
         }
-      });
+        
+        // Small delay between pagination requests
+        if (hasMorePages) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
       
-      console.log(`[E-Hentai] Found ${pageLinks.length} page links`);
+      console.log(`[E-Hentai] Found ${pageLinks.length} page links across ${currentPage} pages`);
       
-      // Fetch actual image URLs from each page (limit to first 100 pages)
-      const limitedLinks = pageLinks.slice(0, 100);
+      // Fetch actual image URLs from each page (limit to first 200 pages)
+      const limitedLinks = pageLinks.slice(0, 200);
       const pages = [];
       
       // Fetch pages in batches of 5 to avoid overwhelming the server
