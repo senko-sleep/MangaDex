@@ -17,7 +17,7 @@ const scrapers = {
   imhentai: new IMHentaiScraper(),
 };
 
-// Source metadata with content types
+// Source metadata with content types and supported filters
 export const sources = {
   // Mainstream manga sources
   mangadex: {
@@ -28,6 +28,12 @@ export const sources = {
     enabled: true,
     description: 'Official API, reliable',
     contentTypes: ['manga', 'manhwa', 'manhua', 'oneshot'],
+    // Supported filters for this source
+    filters: {
+      tags: true,           // Supports tag filtering via API
+      status: true,         // Supports status filter (ongoing/completed)
+      sort: ['popular', 'latest', 'updated', 'rating'],  // Supported sort options
+    },
   },
   // Adult content sources
   nhentai: {
@@ -38,6 +44,11 @@ export const sources = {
     enabled: true,
     description: 'Doujinshi library (API)',
     contentTypes: ['doujinshi', 'manga'],
+    filters: {
+      tags: true,           // Supports tag search in query
+      status: false,        // No status filter
+      sort: ['popular', 'latest'],  // Limited sort options
+    },
   },
   ehentai: {
     id: 'ehentai',
@@ -47,6 +58,11 @@ export const sources = {
     enabled: true,
     description: 'Largest doujinshi archive',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset', 'cosplay'],
+    filters: {
+      tags: true,           // Supports tag search
+      status: false,        // No status filter
+      sort: ['popular'],    // Limited sort
+    },
   },
   imhentai: {
     id: 'imhentai',
@@ -56,6 +72,11 @@ export const sources = {
     enabled: true,
     description: 'Large adult content library',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset'],
+    filters: {
+      tags: true,           // Supports tag search
+      status: false,        // No status filter
+      sort: ['popular', 'latest'],  // Limited sort
+    },
   },
 };
 
@@ -310,40 +331,56 @@ export async function getChapterPages(chapterId, mangaId) {
   return pages;
 }
 
-// Get all tags from all sources (cached for 1 hour)
-export async function getAllTags(includeAdult = false) {
-  const cacheKey = `tags:${includeAdult}`;
+// Get tags for specific sources (cached for 1 hour)
+export async function getTagsForSources(sourceIds = null, includeAdult = false) {
+  // If no specific sources, get all enabled sources
+  const targetSourceIds = sourceIds && sourceIds.length > 0 
+    ? sourceIds 
+    : getEnabledSources(includeAdult).map(s => s.id);
+  
+  const cacheKey = `tags:${targetSourceIds.sort().join(',')}:${includeAdult}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const allTags = new Set();
-  const adultTags = new Set();
+  const tagsBySource = {};
+  const allTagsSet = new Set();
   
-  for (const [sourceId, scraper] of Object.entries(scrapers)) {
+  for (const sourceId of targetSourceIds) {
+    const scraper = scrapers[sourceId];
+    const source = sources[sourceId];
+    
+    if (!scraper || !source) continue;
+    if (!includeAdult && source.isAdult) continue;
+    
     try {
-      const source = sources[sourceId];
       const tags = await scraper.getTags();
-      
       if (Array.isArray(tags)) {
-        if (source.isAdult) {
-          tags.forEach(t => adultTags.add(t));
-        } else {
-          tags.forEach(t => allTags.add(t));
-        }
+        tagsBySource[sourceId] = tags.sort();
+        tags.forEach(t => allTagsSet.add(t));
       }
     } catch (e) {
       console.error(`[${sourceId}] Tags error:`, e.message);
+      tagsBySource[sourceId] = [];
     }
   }
 
   const result = {
-    tags: Array.from(allTags).sort(),
-    adultTags: includeAdult ? Array.from(adultTags).sort() : [],
+    // All unique tags across selected sources
+    tags: Array.from(allTagsSet).sort(),
+    // Tags organized by source
+    bySource: tagsBySource,
+    // Total count for UI decisions
+    totalCount: allTagsSet.size,
   };
 
   // Cache for longer (1 hour) since tags don't change often
   cache.set(cacheKey, result, 3600);
   return result;
+}
+
+// Legacy function for backward compatibility
+export async function getAllTags(includeAdult = false) {
+  return getTagsForSources(null, includeAdult);
 }
 
 export default {
@@ -360,4 +397,5 @@ export default {
   getChapters,
   getChapterPages,
   getAllTags,
+  getTagsForSources,
 };

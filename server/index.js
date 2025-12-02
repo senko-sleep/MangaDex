@@ -196,10 +196,11 @@ app.post('/api/sources/:id/toggle', (req, res) => {
   res.json({ success });
 });
 
-// Get all tags
+// Get tags (optionally filtered by sources)
 app.get('/api/tags', async (req, res) => {
   const includeAdult = req.query.adult === 'true';
-  const tags = await scrapers.getAllTags(includeAdult);
+  const sourceIds = req.query.sources ? req.query.sources.split(',').filter(Boolean) : null;
+  const tags = await scrapers.getTagsForSources(sourceIds, includeAdult);
   res.json(tags);
 });
 

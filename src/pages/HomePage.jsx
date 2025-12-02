@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, X, Eye, EyeOff, Sparkles, TrendingUp,
@@ -188,7 +188,9 @@ export default function HomePage() {
   const [statusFilter, setStatusFilter] = useState(savedState?.statusFilter || 'all');
   const [sortBy, setSortBy] = useState(savedState?.sortBy || 'popular');
   const [allTags, setAllTags] = useState([]);
-  const [adultTags, setAdultTags] = useState([]);
+  const [tagsBySource, setTagsBySource] = useState({});
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState(savedState?.selectedTags || []);
   const [excludedTags, setExcludedTags] = useState(savedState?.excludedTags || []);
   const [showFilters, setShowFilters] = useState(false);
@@ -244,18 +246,32 @@ export default function HomePage() {
     fetchSections();
   }, []);
 
-  // Load sources and tags on mount
+  // Load sources on mount
   useEffect(() => {
     fetch(apiUrl(`/api/sources?adult=${showAdult}`)).then(r => r.json()).then(d => {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
       setContentTypes(d.contentTypes || []);
     }).catch(() => {});
-    fetch(apiUrl(`/api/tags?adult=${showAdult}`)).then(r => r.json()).then(d => {
-      setAllTags(d.tags || []);
-      setAdultTags(d.adultTags || []);
-    }).catch(() => {});
   }, [showAdult]);
+
+  // Fetch tags when selected sources or adult setting changes
+  useEffect(() => {
+    const fetchTags = async () => {
+      setTagsLoading(true);
+      try {
+        const sourcesParam = selectedSources.length > 0 ? `&sources=${selectedSources.join(',')}` : '';
+        const res = await fetch(apiUrl(`/api/tags?adult=${showAdult}${sourcesParam}`));
+        const data = await res.json();
+        setAllTags(data.tags || []);
+        setTagsBySource(data.bySource || {});
+      } catch (e) {
+        console.error('[MangaFox] Error fetching tags:', e);
+      }
+      setTagsLoading(false);
+    };
+    fetchTags();
+  }, [selectedSources, showAdult]);
   
   // Handle source filter from navigation (when coming back from manga details)
   useEffect(() => {
@@ -473,6 +489,88 @@ export default function HomePage() {
     );
   };
 
+  // Compute available content types based on selected sources
+  const availableContentTypes = useMemo(() => {
+    // If no sources selected, use all content types from all sources
+    const relevantSources = selectedSources.length > 0 
+      ? sources.filter(s => selectedSources.includes(s.id))
+      : sources;
+    
+    // Collect all content types from relevant sources
+    const typeSet = new Set();
+    relevantSources.forEach(s => {
+      (s.contentTypes || ['manga']).forEach(t => typeSet.add(t));
+    });
+    
+    // Filter contentTypes to only those available
+    return contentTypes.filter(t => typeSet.has(t.id));
+  }, [selectedSources, sources, contentTypes]);
+
+  // Reset content type if it's no longer available
+  useEffect(() => {
+    if (contentType !== 'all' && availableContentTypes.length > 0) {
+      const isAvailable = availableContentTypes.some(t => t.id === contentType);
+      if (!isAvailable) {
+        setContentType('all');
+      }
+    }
+  }, [availableContentTypes, contentType]);
+
+  // Compute available filters based on selected sources
+  const availableFilters = useMemo(() => {
+    const relevantSources = selectedSources.length > 0 
+      ? sources.filter(s => selectedSources.includes(s.id))
+      : sources;
+    
+    // Check if ANY selected source supports each filter
+    // Default to true if filters metadata not present (backward compatibility)
+    const supportsTags = relevantSources.length === 0 || relevantSources.some(s => s.filters?.tags !== false);
+    const supportsStatus = relevantSources.some(s => s.filters?.status);
+    
+    // Collect all supported sort options across selected sources
+    const sortOptions = new Set();
+    relevantSources.forEach(s => {
+      (s.filters?.sort || ['popular', 'latest', 'updated']).forEach(opt => sortOptions.add(opt));
+    });
+    
+    // If no sources or no filters metadata, provide defaults
+    if (sortOptions.size === 0) {
+      ['popular', 'latest', 'updated'].forEach(opt => sortOptions.add(opt));
+    }
+    
+    return {
+      tags: supportsTags,
+      status: supportsStatus,
+      sort: Array.from(sortOptions),
+    };
+  }, [selectedSources, sources]);
+
+  // Reset filters when they become unavailable
+  useEffect(() => {
+    if (!availableFilters.status && statusFilter !== 'all') {
+      setStatusFilter('all');
+    }
+    if (!availableFilters.sort.includes(sortBy)) {
+      setSortBy(availableFilters.sort[0] || 'popular');
+    }
+    // Clear tags when tags filter becomes unavailable
+    if (!availableFilters.tags && (selectedTags.length > 0 || excludedTags.length > 0)) {
+      setSelectedTags([]);
+      setExcludedTags([]);
+    }
+  }, [availableFilters, statusFilter, sortBy, selectedTags.length, excludedTags.length]);
+
+  // Filter tags based on search query
+  const filteredTags = useMemo(() => {
+    if (!availableFilters.tags) return [];
+    if (!tagSearch.trim()) return allTags;
+    const query = tagSearch.toLowerCase().trim();
+    return allTags.filter(tag => tag.toLowerCase().includes(query));
+  }, [availableFilters.tags, allTags, tagSearch]);
+
+  // Determine if we need searchable interface (over 50 tags)
+  const needsTagSearch = allTags.length > 50;
+
   // Check if any filters are active (non-default values)
   const hasFilters = selectedTags.length > 0 || excludedTags.length > 0 || selectedSources.length > 0;
   const hasAdvancedFilters = contentRating !== 'safe' || statusFilter !== 'all' || sortBy !== 'popular' || contentType !== 'all';
@@ -565,7 +663,7 @@ export default function HomePage() {
               className="fixed inset-0 bg-black/40 z-40 animate-in fade-in duration-200"
               onClick={() => setShowFilters(false)}
             />
-            <div className="relative z-50 border-t border-white/5 bg-zinc-950/98 backdrop-blur-xl shadow-2xl shadow-black/50">
+            <div className="relative z-50 border-t border-white/5 bg-zinc-950/98 backdrop-blur-xl shadow-2xl shadow-black/50 max-h-[70vh] overflow-y-auto scrollbar-thin">
               <div className="max-w-7xl mx-auto px-4 py-5 slide-up">
               {/* Filter Header */}
               <div className="flex items-center justify-between mb-5">
@@ -588,9 +686,15 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* Quick Filters Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                {/* Content Rating */}
+              {/* Quick Filters Row - dynamically sized based on available filters */}
+              <div className={`grid grid-cols-1 gap-4 mb-5 ${
+                availableFilters.status && availableFilters.sort.length > 1 
+                  ? 'md:grid-cols-3' 
+                  : availableFilters.status || availableFilters.sort.length > 1 
+                    ? 'md:grid-cols-2' 
+                    : ''
+              }`}>
+                {/* Content Rating - Always shown */}
                 <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
                   <div className="flex items-center gap-2 mb-3">
                     <Shield className="w-4 h-4 text-emerald-500" />
@@ -633,187 +737,163 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Status Filter */}
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Clock className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</span>
+                {/* Status Filter - Only show when supported by selected sources */}
+                {availableFilters.status && (
+                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Clock className="w-4 h-4 text-blue-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setStatusFilter('all')}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          statusFilter === 'all' 
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setStatusFilter('ongoing')}
+                        className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          statusFilter === 'ongoing' 
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        <Loader2 className="w-3 h-3" />
+                        Ongoing
+                      </button>
+                      <button
+                        onClick={() => setStatusFilter('completed')}
+                        className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          statusFilter === 'completed' 
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Completed
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setStatusFilter('all')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        statusFilter === 'all' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setStatusFilter('ongoing')}
-                      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        statusFilter === 'ongoing' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Loader2 className="w-3 h-3" />
-                      Ongoing
-                    </button>
-                    <button
-                      onClick={() => setStatusFilter('completed')}
-                      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        statusFilter === 'completed' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      Completed
-                    </button>
-                  </div>
-                </div>
+                )}
 
-                {/* Sort By */}
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <ArrowUpDown className="w-4 h-4 text-purple-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort By</span>
+                {/* Sort By - Only show when multiple sort options available */}
+                {availableFilters.sort.length > 1 && (
+                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowUpDown className="w-4 h-4 text-purple-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort By</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {availableFilters.sort.includes('popular') && (
+                        <button
+                          onClick={() => setSortBy('popular')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                            sortBy === 'popular' 
+                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+                        >
+                          Popular
+                        </button>
+                      )}
+                      {availableFilters.sort.includes('latest') && (
+                        <button
+                          onClick={() => setSortBy('latest')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                            sortBy === 'latest' 
+                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+                        >
+                          Latest
+                        </button>
+                      )}
+                      {availableFilters.sort.includes('updated') && (
+                        <button
+                          onClick={() => setSortBy('updated')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                            sortBy === 'updated' 
+                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+                        >
+                          Updated
+                        </button>
+                      )}
+                      {availableFilters.sort.includes('rating') && (
+                        <button
+                          onClick={() => setSortBy('rating')}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                            sortBy === 'rating' 
+                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
+                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+                        >
+                          Rating
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setSortBy('popular')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        sortBy === 'popular' 
-                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      Popular
-                    </button>
-                    <button
-                      onClick={() => setSortBy('latest')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        sortBy === 'latest' 
-                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      Latest
-                    </button>
-                    <button
-                      onClick={() => setSortBy('updated')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        sortBy === 'updated' 
-                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      Updated
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Content Type & Sources Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                {/* Content Type Filter */}
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Layers className="w-4 h-4 text-cyan-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Type</span>
+              <div className={`grid grid-cols-1 ${availableContentTypes.length > 1 ? 'md:grid-cols-2' : ''} gap-4 mb-5`}>
+                {/* Content Type Filter - Only show when multiple types available */}
+                {availableContentTypes.length > 1 && (
+                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Layers className="w-4 h-4 text-cyan-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Type</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setContentType('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          contentType === 'all' 
+                            ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        All
+                      </button>
+                      {availableContentTypes.map(type => {
+                        const icons = {
+                          manga: Book,
+                          manhwa: Book,
+                          manhua: Book,
+                          doujinshi: BookOpen,
+                          artistcg: Palette,
+                          gamecg: Gamepad2,
+                          imageset: ImageIcon,
+                          western: Globe,
+                          cosplay: Camera,
+                          oneshot: Book,
+                        };
+                        const Icon = icons[type.id] || Book;
+                        return (
+                          <button
+                            key={type.id}
+                            onClick={() => setContentType(type.id)}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              contentType === type.id 
+                                ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                            }`}
+                          >
+                            <Icon className="w-3 h-3" />
+                            {type.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setContentType('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'all' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setContentType('manga')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'manga' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Book className="w-3 h-3" />
-                      Manga
-                    </button>
-                    <button
-                      onClick={() => setContentType('doujinshi')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'doujinshi' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <BookOpen className="w-3 h-3" />
-                      Doujinshi
-                    </button>
-                    <button
-                      onClick={() => setContentType('artistcg')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'artistcg' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Palette className="w-3 h-3" />
-                      Artist CG
-                    </button>
-                    <button
-                      onClick={() => setContentType('gamecg')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'gamecg' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Gamepad2 className="w-3 h-3" />
-                      Game CG
-                    </button>
-                    <button
-                      onClick={() => setContentType('imageset')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'imageset' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <ImageIcon className="w-3 h-3" />
-                      Image Set
-                    </button>
-                    <button
-                      onClick={() => setContentType('western')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'western' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Globe className="w-3 h-3" />
-                      Western
-                    </button>
-                    <button
-                      onClick={() => setContentType('cosplay')}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        contentType === 'cosplay' 
-                          ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Camera className="w-3 h-3" />
-                      Cosplay
-                    </button>
-                  </div>
-                </div>
+                )}
 
                 {/* Sources Filter */}
                 <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
@@ -907,76 +987,140 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Tags Section */}
-              <div className="bg-zinc-900/30 rounded-xl border border-zinc-800/50 overflow-hidden">
-                <button
-                  onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-md bg-orange-500/20 flex items-center justify-center">
-                      <Filter className="w-3 h-3 text-orange-500" />
-                    </div>
-                    <span className="text-sm font-medium">Genre & Tags</span>
-                    <span className="text-xs text-zinc-500 hidden sm:inline">(Click to include, right-click to exclude)</span>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
-                </button>
-                
-                {expandedSection === 'tags' && (
-                  <div className="px-4 pb-4 border-t border-zinc-800/50">
-                    {/* Main Tags */}
-                    <div className="pt-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {allTags.map(tag => (
-                          <button
-                            key={tag}
-                            onClick={() => toggleTag(tag, 'include')}
-                            onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                            className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                              selectedTags.includes(tag) 
-                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25' 
-                                : excludedTags.includes(tag) 
-                                  ? 'bg-red-500 text-white shadow-md shadow-red-500/25' 
-                                  : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                            }`}
-                          >
-                            {tag}
-                          </button>
-                        ))}
+              {/* Tags Section - Only show when tags are supported */}
+              {availableFilters.tags && allTags.length > 0 && (
+                <div className="bg-zinc-900/30 rounded-xl border border-zinc-800/50 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-orange-500/20 flex items-center justify-center">
+                        <Filter className="w-3 h-3 text-orange-500" />
                       </div>
+                      <span className="text-sm font-medium">Genre & Tags</span>
+                      <span className="text-xs text-zinc-500 hidden sm:inline">
+                        {tagsLoading ? '(Loading...)' : `(${allTags.length} tags)`}
+                      </span>
                     </div>
+                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {expandedSection === 'tags' && (
+                    <div className="px-4 pb-4 border-t border-zinc-800/50">
+                      {/* Search bar for tags (shown when > 50 tags) */}
+                      {needsTagSearch && (
+                        <div className="pt-3 pb-2">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                            <input
+                              type="text"
+                              value={tagSearch}
+                              onChange={(e) => setTagSearch(e.target.value)}
+                              placeholder="Search tags..."
+                              className="w-full h-9 pl-9 pr-8 bg-zinc-800 border border-zinc-700 rounded-lg text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20"
+                            />
+                            {tagSearch && (
+                              <button
+                                onClick={() => setTagSearch('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-zinc-700 rounded"
+                              >
+                                <X className="w-3 h-3 text-zinc-400" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-2 text-xs text-zinc-500">
+                            {tagSearch ? `${filteredTags.length} of ${allTags.length} tags` : 'Click to include, right-click to exclude'}
+                          </div>
+                        </div>
+                      )}
 
-                    {/* Adult Tags */}
-                    {showAdult && adultTags.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-zinc-800/50">
-                        <div className="flex items-center gap-2 mb-3">
-                          <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
-                          <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Adult Content Tags</span>
+                      {/* Selected tags always shown at top */}
+                      {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                        <div className="pt-2 pb-3 border-b border-zinc-800/50 mb-3">
+                          <div className="text-xs text-zinc-500 mb-2">Selected filters:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedTags.map(tag => (
+                              <button
+                                key={`selected-${tag}`}
+                                onClick={() => toggleTag(tag, 'include')}
+                                className="px-2.5 py-1.5 text-xs rounded-lg font-medium bg-emerald-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-1"
+                              >
+                                <span className="font-bold">+</span>{tag}
+                                <X className="w-3 h-3 ml-1" />
+                              </button>
+                            ))}
+                            {excludedTags.map(tag => (
+                              <button
+                                key={`excluded-${tag}`}
+                                onClick={() => toggleTag(tag, 'exclude')}
+                                className="px-2.5 py-1.5 text-xs rounded-lg font-medium bg-red-500 text-white shadow-md shadow-red-500/25 flex items-center gap-1"
+                              >
+                                <span className="font-bold">−</span>{tag}
+                                <X className="w-3 h-3 ml-1" />
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {adultTags.map(tag => (
-                            <button
-                              key={tag}
-                              onClick={() => toggleTag(tag, 'include')}
-                              onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                              className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                                selectedTags.includes(tag) 
-                                  ? 'bg-emerald-500 text-white' 
-                                  : excludedTags.includes(tag) 
-                                    ? 'bg-red-500 text-white' 
-                                    : 'bg-red-950/50 text-red-300/70 hover:text-red-200 hover:bg-red-900/50 border border-red-900/30'
-                              }`}
-                            >
-                              {tag}
-                            </button>
-                          ))}
+                      )}
+
+                      {/* Loading state */}
+                      {tagsLoading ? (
+                        <div className="py-8 flex items-center justify-center">
+                          <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                          <span className="ml-2 text-sm text-zinc-500">Loading tags...</span>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      ) : (
+                        <>
+                          {/* Tags list - scrollable if many tags */}
+                          <div className={`pt-2 ${needsTagSearch ? 'max-h-64 overflow-y-auto scrollbar-thin' : ''}`}>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(needsTagSearch ? filteredTags : allTags).map(tag => (
+                                <button
+                                  key={tag}
+                                  onClick={() => toggleTag(tag, 'include')}
+                                  onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
+                                  className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                                    selectedTags.includes(tag) 
+                                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25' 
+                                      : excludedTags.includes(tag) 
+                                        ? 'bg-red-500 text-white shadow-md shadow-red-500/25' 
+                                        : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                                  }`}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                            {needsTagSearch && filteredTags.length === 0 && tagSearch && (
+                              <div className="py-4 text-center text-sm text-zinc-500">
+                                No tags matching "{tagSearch}"
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Source breakdown (if multiple sources selected) */}
+                          {Object.keys(tagsBySource).length > 1 && !tagSearch && (
+                            <div className="mt-4 pt-3 border-t border-zinc-800/50">
+                              <div className="text-xs text-zinc-500 mb-2">Tags by source:</div>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(tagsBySource).map(([sourceId, sourceTags]) => {
+                                  const source = sources.find(s => s.id === sourceId);
+                                  return (
+                                    <span key={sourceId} className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                                      {source?.name || sourceId}: {sourceTags.length}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Bar */}
               <div className="mt-5 pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-4">
@@ -1018,7 +1162,7 @@ export default function HomePage() {
           <>
             {/* New Manga Section */}
             {(sectionsLoading || newManga.length > 0) && (
-              <section className="py-6 border-b border-zinc-900">
+              <section className="py-6">
                 <div className="max-w-7xl mx-auto px-4">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -1045,7 +1189,7 @@ export default function HomePage() {
 
             {/* Recently Updated Section */}
             {(sectionsLoading || recentlyUpdated.length > 0) && (
-              <section className="py-6 border-b border-zinc-900">
+              <section className="py-6">
                 <div className="max-w-7xl mx-auto px-4">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">

@@ -293,6 +293,9 @@ export default function ChapterReaderPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
+  const [showPageInput, setShowPageInput] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
+  const pageInputRef = useRef(null);
   
   // Load settings from localStorage or use defaults
   const [settings, setSettings] = useState(() => {
@@ -908,10 +911,48 @@ export default function ChapterReaderPage() {
                       style={{ width: `${((currentPage + 1) / pages.length) * 100}%` }}
                     />
                   </div>
-                  <div className="flex justify-between mt-2 text-xs text-zinc-500">
-                    <span>1</span>
-                    <span className="text-white font-medium">{currentPage + 1} / {pages.length}</span>
-                    <span>{pages.length}</span>
+                  <div className="flex justify-center mt-2 text-xs text-zinc-500">
+                    {showPageInput ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const pageNum = parseInt(pageInputValue, 10);
+                          if (pageNum >= 1 && pageNum <= pages.length) {
+                            goToPage(pageNum - 1);
+                          }
+                          setShowPageInput(false);
+                          setPageInputValue('');
+                        }}
+                        className="flex items-center gap-1"
+                      >
+                        <input
+                          ref={pageInputRef}
+                          type="number"
+                          min="1"
+                          max={pages.length}
+                          value={pageInputValue}
+                          onChange={(e) => setPageInputValue(e.target.value)}
+                          onBlur={() => {
+                            setShowPageInput(false);
+                            setPageInputValue('');
+                          }}
+                          className="w-12 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-center text-white text-xs focus:outline-none focus:border-orange-500"
+                          autoFocus
+                        />
+                        <span className="text-white">/ {pages.length}</span>
+                      </form>
+                    ) : (
+                      <span
+                        className="text-white font-medium cursor-pointer hover:text-orange-400 transition-colors"
+                        onClick={() => {
+                          setPageInputValue(String(currentPage + 1));
+                          setShowPageInput(true);
+                        }}
+                        title="Click to jump to page"
+                      >
+                        {currentPage + 1} / {pages.length}
+                      </span>
+                    )}
                   </div>
                 </div>
                 
