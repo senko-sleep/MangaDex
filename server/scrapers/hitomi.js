@@ -82,7 +82,14 @@ export class HitomiScraper extends BaseScraper {
         // Content might already be there
       }
       
-      // Wait a bit for JS to fully render the gallery list
+      // Wait longer for JS to fully render all gallery items
+      // Hitomi loads galleries dynamically via JavaScript
+      await page.waitForTimeout(3000);
+      
+      // Scroll down to trigger lazy loading of more items
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
       await page.waitForTimeout(1500);
       
       const html = await page.content();
@@ -100,22 +107,17 @@ export class HitomiScraper extends BaseScraper {
     const results = [];
     if (!html) return results;
     
-    // Parse gallery items - Hitomi structure:
-    // <a href="/type/title-id.html" class="lillie">
-    //   <div class="dj-img-cont">...</div>
-    //   <h1 class="lillie">Title</h1>
-    // </a>
-    
-    // Match gallery links with their content
-    const galleryRegex = /<a[^>]*href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]+\.html)"[^>]*class="lillie"[^>]*>([\s\S]*?)<\/a>/gi;
     const seen = new Set();
     
+    // Method 1: Match gallery links with lillie class (can be before or after href)
+    // Hitomi structure varies: class="lillie" can appear before or after href
+    const galleryRegex1 = /<a[^>]*(?:class="[^"]*lillie[^"]*"[^>]*href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]+\.html)"|href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]+\.html)"[^>]*class="[^"]*lillie[^"]*")[^>]*>([\s\S]*?)<\/a>/gi;
+    
     let match;
-    while ((match = galleryRegex.exec(html)) !== null) {
-      const href = match[1];
-      const content = match[2];
+    while ((match = galleryRegex1.exec(html)) !== null) {
+      const href = match[1] || match[2];
+      const content = match[3];
       
-      // Extract ID from URL like /doujinshi/title-123.html
       const idMatch = href.match(/-(\d+)\.html$/);
       if (!idMatch) continue;
       
@@ -123,7 +125,6 @@ export class HitomiScraper extends BaseScraper {
       if (seen.has(gid)) continue;
       seen.add(gid);
       
-      // Get type from URL
       let type = 'doujinshi';
       if (href.includes('/manga/')) type = 'manga';
       else if (href.includes('/artistcg/')) type = 'artistcg';
@@ -131,25 +132,22 @@ export class HitomiScraper extends BaseScraper {
       else if (href.includes('/anime/')) type = 'anime';
       else if (href.includes('/imageset/')) type = 'imageset';
       
-      // Extract title from h1.lillie inside the link
-      const titleMatch = content.match(/<h1[^>]*class="lillie"[^>]*>([^<]+)<\/h1>/i);
-      let title = titleMatch ? titleMatch[1].trim() : '';
+      // Extract title - try multiple patterns
+      let title = '';
+      const titleMatch = content.match(/<h1[^>]*>([^<]+)<\/h1>/i) || 
+                         content.match(/<span[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)/i);
+      if (titleMatch) title = titleMatch[1].trim();
       
-      // Fallback: try to extract from URL
       if (!title || title.length < 2) {
-        // URL format: /type/title-slug-id.html
         const urlTitleMatch = href.match(/\/[^/]+\/(.+)-\d+\.html$/);
         if (urlTitleMatch) {
           title = urlTitleMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
-          // Capitalize first letter of each word
           title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         } else {
           title = `Gallery ${gid}`;
         }
       }
       
-      // Extract cover image from content
-      // Look for img with data-src or src
       const imgMatch = content.match(/(?:data-src|src)="([^"]*(?:\.webp|\.jpg|\.png|\.avif)[^"]*)"/i);
       let cover = imgMatch ? imgMatch[1] : '';
       if (cover.startsWith('//')) cover = 'https:' + cover;
@@ -166,6 +164,49 @@ export class HitomiScraper extends BaseScraper {
       });
     }
     
+    // Method 2: Fallback - find all gallery links by URL pattern
+    const hrefRegex = /href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]*-(\d+)\.html)"/gi;
+    while ((match = hrefRegex.exec(html)) !== null) {
+      const href = match[1];
+      const gid = match[2];
+      
+      if (seen.has(gid)) continue;
+      seen.add(gid);
+      
+      let type = 'doujinshi';
+      if (href.includes('/manga/')) type = 'manga';
+      else if (href.includes('/artistcg/')) type = 'artistcg';
+      else if (href.includes('/gamecg/')) type = 'gamecg';
+      else if (href.includes('/anime/')) type = 'anime';
+      else if (href.includes('/imageset/')) type = 'imageset';
+      
+      // Extract title from URL
+      const urlTitleMatch = href.match(/\/[^/]+\/(.+)-\d+\.html$/);
+      let title = `Gallery ${gid}`;
+      if (urlTitleMatch) {
+        title = urlTitleMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+        title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
+      
+      // Try to find cover image near this link
+      const surroundingHtml = html.substring(Math.max(0, match.index - 500), match.index + 500);
+      const imgMatch = surroundingHtml.match(/(?:data-src|src)="([^"]*(?:tn\.hitomi\.la|smalltn|bigtn)[^"]*\.(?:webp|jpg|png|avif)[^"]*)"/i);
+      let cover = imgMatch ? imgMatch[1] : '';
+      if (cover.startsWith('//')) cover = 'https:' + cover;
+      
+      results.push({
+        id: `hitomi:${gid}`,
+        sourceId: 'hitomi',
+        slug: gid,
+        title,
+        cover: this.proxyUrl(cover),
+        type,
+        isAdult: true,
+        contentType: type,
+      });
+    }
+    
+    console.log(`[Hitomi] Parsed ${results.length} galleries from HTML`);
     return results;
   }
 

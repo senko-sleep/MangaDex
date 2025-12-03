@@ -11,6 +11,8 @@ const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
 // Request timeout - fail fast
 const REQUEST_TIMEOUT = 8000;
+// Hitomi needs more time because it uses Playwright
+const HITOMI_TIMEOUT = 45000;
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
@@ -19,6 +21,12 @@ const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
     timeoutId = setTimeout(() => reject(new Error('Timeout')), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
+
+// Get appropriate timeout for source
+const getTimeoutForSource = (sourceId) => {
+  if (sourceId === 'hitomi') return HITOMI_TIMEOUT;
+  return REQUEST_TIMEOUT;
 };
 
 // Deduplicate results by ID to prevent React key warnings
@@ -279,7 +287,8 @@ export async function search(query, options = {}) {
             status, 
             adultOnly,
             parsed.language // Pass language for sources that support it
-          )
+          ),
+          getTimeoutForSource(sourceId)
         );
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
@@ -314,7 +323,7 @@ export async function getPopular(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly));
+        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly), getTimeoutForSource(sourceId));
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
@@ -347,7 +356,7 @@ export async function getLatest(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly));
+        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly), getTimeoutForSource(sourceId));
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
