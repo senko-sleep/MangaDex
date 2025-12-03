@@ -160,7 +160,8 @@ app.get('/api/proxy/image', async (req, res) => {
 // Get available sources
 app.get('/api/sources', (req, res) => {
   const includeAdult = req.query.adult === 'true';
-  const allSources = scrapers.getSources(includeAdult);
+  const adultOnly = req.query.adultOnly === 'true';
+  const allSources = scrapers.getSources(includeAdult, adultOnly);
   
   // Build content types list from sources
   const contentTypeSet = new Set();
@@ -184,7 +185,7 @@ app.get('/api/sources', (req, res) => {
   
   res.json({
     sources: allSources,
-    enabled: scrapers.getEnabledSources(includeAdult).map(s => s.id),
+    enabled: scrapers.getEnabledSources(includeAdult, adultOnly).map(s => s.id),
     contentTypes,
   });
 });

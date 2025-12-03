@@ -118,13 +118,24 @@ export const sources = {
 };
 
 // Get all available sources
-export function getSources(includeAdult = false) {
-  return Object.values(sources).filter(s => includeAdult || !s.isAdult);
+// includeAdult: show adult sources alongside SFW
+// adultOnly: show ONLY adult sources (for 18+ mode)
+export function getSources(includeAdult = false, adultOnly = false) {
+  return Object.values(sources).filter(s => {
+    if (adultOnly) return s.isAdult;  // Only show adult sources
+    if (includeAdult) return true;     // Show all sources
+    return !s.isAdult;                 // Only show SFW sources
+  });
 }
 
 // Get enabled sources
-export function getEnabledSources(includeAdult = false) {
-  return Object.values(sources).filter(s => s.enabled && (includeAdult || !s.isAdult));
+export function getEnabledSources(includeAdult = false, adultOnly = false) {
+  return Object.values(sources).filter(s => {
+    if (!s.enabled) return false;
+    if (adultOnly) return s.isAdult;
+    if (includeAdult) return true;
+    return !s.isAdult;
+  });
 }
 
 // Toggle source

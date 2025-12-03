@@ -246,12 +246,15 @@ export default function HomePage() {
     fetchSections();
   }, []);
 
-  // Load sources on mount
+  // Load sources on mount - when showAdult is true, only show NSFW sources
   useEffect(() => {
-    fetch(apiUrl(`/api/sources?adult=${showAdult}`)).then(r => r.json()).then(d => {
+    const adultOnly = showAdult ? 'true' : 'false';
+    fetch(apiUrl(`/api/sources?adult=${showAdult}&adultOnly=${adultOnly}`)).then(r => r.json()).then(d => {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
       setContentTypes(d.contentTypes || []);
+      // Clear selected sources when switching modes to avoid selecting unavailable sources
+      setSelectedSources([]);
     }).catch(() => {});
   }, [showAdult]);
 
