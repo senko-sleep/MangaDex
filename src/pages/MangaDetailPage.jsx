@@ -309,7 +309,7 @@ export default function MangaDetailPage() {
               }}
               className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors flex items-center gap-2"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <Search className="w-5 h-5" />
               <span className="text-sm font-medium hidden sm:inline">Browse</span>
             </button>
             
