@@ -56,10 +56,10 @@ export const sources = {
     id: 'mangaupdates',
     name: 'MangaUpdates',
     icon: '📚',
-    isAdult: false,
+    isAdult: null,  // Has both SFW and NSFW content - show in both modes
     enabled: true,
     description: 'Comprehensive manga database',
-    contentTypes: ['manga', 'manhwa', 'manhua'],
+    contentTypes: ['manga', 'manhwa', 'manhua', 'doujinshi'],
     filters: {
       tags: true,
       status: true,
@@ -120,11 +120,13 @@ export const sources = {
 // Get all available sources
 // includeAdult: show adult sources alongside SFW
 // adultOnly: show ONLY adult sources (for 18+ mode)
+// isAdult: true = NSFW only, false = SFW only, null = show in both modes
 export function getSources(includeAdult = false, adultOnly = false) {
   return Object.values(sources).filter(s => {
-    if (adultOnly) return s.isAdult;  // Only show adult sources
-    if (includeAdult) return true;     // Show all sources
-    return !s.isAdult;                 // Only show SFW sources
+    if (s.isAdult === null) return true;  // Show in both modes
+    if (adultOnly) return s.isAdult;       // Only show adult sources
+    if (includeAdult) return true;         // Show all sources
+    return !s.isAdult;                     // Only show SFW sources
   });
 }
 
@@ -132,6 +134,7 @@ export function getSources(includeAdult = false, adultOnly = false) {
 export function getEnabledSources(includeAdult = false, adultOnly = false) {
   return Object.values(sources).filter(s => {
     if (!s.enabled) return false;
+    if (s.isAdult === null) return true;  // Show in both modes
     if (adultOnly) return s.isAdult;
     if (includeAdult) return true;
     return !s.isAdult;
