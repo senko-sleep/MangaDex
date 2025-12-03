@@ -642,12 +642,12 @@ export default function ChapterReaderPage() {
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             {/* Left */}
             <div className="flex items-center gap-3 min-w-0">
-              <Link 
-                to={`/manga/${id}`} 
+              <button 
+                onClick={() => navigate(-1)}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
-              </Link>
+              </button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">

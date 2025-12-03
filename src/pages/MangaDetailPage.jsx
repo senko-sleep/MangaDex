@@ -302,17 +302,11 @@ export default function MangaDetailPage() {
         <header className="absolute top-0 left-0 right-0 z-20">
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <button 
-              onClick={() => {
-                if (window.history.length > 1) {
-                  navigate(-1);
-                } else {
-                  navigate('/');
-                }
-              }}
+              onClick={() => navigate(-1)}
               className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors flex items-center gap-2"
             >
-              <Search className="w-5 h-5" />
-              <span className="text-sm font-medium hidden sm:inline">Browse</span>
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm font-medium hidden sm:inline">Back</span>
             </button>
             
             <div className="flex items-center gap-2">
