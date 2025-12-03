@@ -43,8 +43,13 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
+      // If tags provided, use search
+      if (tags.length > 0 || excludeTags.length > 0) {
+        return this.search('', page, includeAdult, tags, excludeTags);
+      }
+      
       const $ = await this.fetch(`${this.baseUrl}/popular/?page=${page}`);
       if (!$) return [];
       return this.parseGalleryList($);
@@ -54,8 +59,13 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
+      // If tags provided, use search
+      if (tags.length > 0 || excludeTags.length > 0) {
+        return this.search('', page, includeAdult, tags, excludeTags);
+      }
+      
       const $ = await this.fetch(`${this.baseUrl}/?page=${page}`);
       if (!$) return [];
       return this.parseGalleryList($);

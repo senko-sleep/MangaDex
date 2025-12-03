@@ -64,10 +64,15 @@ export class NHentaiScraper extends BaseScraper {
     return results;
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
       // Build search query - nhentai.xxx supports tag search in query
       let searchQuery = query || '';
+      
+      // Add language filter (english, japanese, chinese)
+      if (language && language !== 'all') {
+        searchQuery += ` language:${language}`;
+      }
       
       // Add tags to search query if provided
       if (tags && tags.length > 0) {
@@ -83,7 +88,7 @@ export class NHentaiScraper extends BaseScraper {
       
       // If no query at all, return popular instead
       if (!searchQuery) {
-        return this.getPopular(page);
+        return this.getPopular(page, includeAdult, tags, excludeTags, language);
       }
       
       // nhentai.xxx uses 'key' parameter, not 'q'
@@ -97,8 +102,23 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
+      // If tags or language provided, use search with popular sort
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        let searchQuery = tags.join(' ');
+        if (language && language !== 'all') {
+          searchQuery += ` language:${language}`;
+        }
+        if (excludeTags.length > 0) {
+          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+        }
+        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&sort=popular&page=${page}`;
+        const html = await this.fetchHtml(url);
+        if (!html) return [];
+        return this.parseGalleryList(html);
+      }
+      
       const url = `${this.baseUrl}/?sort=popular&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
@@ -109,8 +129,20 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
+      // If tags provided, use search
+      if (tags.length > 0 || excludeTags.length > 0) {
+        let searchQuery = tags.join(' ');
+        if (excludeTags.length > 0) {
+          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+        }
+        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&page=${page}`;
+        const html = await this.fetchHtml(url);
+        if (!html) return [];
+        return this.parseGalleryList(html);
+      }
+      
       const url = page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl;
       const html = await this.fetchHtml(url);
       if (!html) return [];

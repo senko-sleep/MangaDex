@@ -80,15 +80,33 @@ export class KitsuScraper extends BaseScraper {
     return null;
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const offset = (page - 1) * 20;
       const params = new URLSearchParams({
-        'filter[text]': query,
         'page[limit]': '20',
         'page[offset]': String(offset),
         'include': 'genres,categories',
       });
+      
+      if (query) {
+        params.set('filter[text]', query);
+      }
+      
+      // Map status to Kitsu's status values
+      if (status) {
+        const statusMap = {
+          'ongoing': 'current',
+          'completed': 'finished',
+          'hiatus': 'tba',
+        };
+        params.set('filter[status]', statusMap[status] || status);
+      }
+      
+      // Add genre filter if tags provided
+      if (tags.length > 0) {
+        params.set('filter[genres]', tags.join(','));
+      }
 
       const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
       if (!data?.data) return [];
@@ -100,7 +118,7 @@ export class KitsuScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const offset = (page - 1) * 20;
       const params = new URLSearchParams({
@@ -109,6 +127,21 @@ export class KitsuScraper extends BaseScraper {
         'sort': '-userCount',
         'include': 'genres',
       });
+      
+      // Map status to Kitsu's status values
+      if (status) {
+        const statusMap = {
+          'ongoing': 'current',
+          'completed': 'finished',
+          'hiatus': 'tba',
+        };
+        params.set('filter[status]', statusMap[status] || status);
+      }
+      
+      // Add genre filter if tags provided
+      if (tags.length > 0) {
+        params.set('filter[genres]', tags.join(','));
+      }
 
       const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
       if (!data?.data) return [];
@@ -120,7 +153,7 @@ export class KitsuScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const offset = (page - 1) * 20;
       const params = new URLSearchParams({
@@ -129,6 +162,21 @@ export class KitsuScraper extends BaseScraper {
         'sort': '-updatedAt',
         'include': 'genres',
       });
+      
+      // Map status to Kitsu's status values
+      if (status) {
+        const statusMap = {
+          'ongoing': 'current',
+          'completed': 'finished',
+          'hiatus': 'tba',
+        };
+        params.set('filter[status]', statusMap[status] || status);
+      }
+      
+      // Add genre filter if tags provided
+      if (tags.length > 0) {
+        params.set('filter[genres]', tags.join(','));
+      }
 
       const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
       if (!data?.data) return [];

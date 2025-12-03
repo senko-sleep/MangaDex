@@ -72,7 +72,7 @@ export class MangaUpdatesScraper extends BaseScraper {
     };
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const perPage = 24;
       
@@ -88,6 +88,13 @@ export class MangaUpdatesScraper extends BaseScraper {
       }
       if (excludeTags.length > 0) {
         body.exclude_genre = excludeTags;
+      }
+      
+      // Add status filter - MangaUpdates uses 'filter' parameter
+      if (status === 'completed') {
+        body.filter = 'completed';
+      } else if (status === 'ongoing') {
+        body.filter = 'ongoing';
       }
 
       const res = await this.client.post(`${this.baseUrl}/series/search`, body);
@@ -107,13 +114,28 @@ export class MangaUpdatesScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const body = {
         page: page,
         perpage: 24,
         orderby: 'rating',
       };
+      
+      // Add genre filter if tags provided
+      if (tags.length > 0) {
+        body.include_genre = tags;
+      }
+      if (excludeTags.length > 0) {
+        body.exclude_genre = excludeTags;
+      }
+      
+      // Add status filter - MangaUpdates uses 'filter' parameter
+      if (status === 'completed') {
+        body.filter = 'completed';
+      } else if (status === 'ongoing') {
+        body.filter = 'ongoing';
+      }
 
       const res = await this.client.post(`${this.baseUrl}/series/search`, body);
       if (!res.data?.results) return [];
@@ -131,13 +153,28 @@ export class MangaUpdatesScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const body = {
         page: page,
         perpage: 24,
         orderby: 'year', // Sort by newest
       };
+      
+      // Add genre filter if tags provided
+      if (tags.length > 0) {
+        body.include_genre = tags;
+      }
+      if (excludeTags.length > 0) {
+        body.exclude_genre = excludeTags;
+      }
+      
+      // Add status filter - MangaUpdates uses 'filter' parameter
+      if (status === 'completed') {
+        body.filter = 'completed';
+      } else if (status === 'ongoing') {
+        body.filter = 'ongoing';
+      }
 
       const res = await this.client.post(`${this.baseUrl}/series/search`, body);
       if (!res.data?.results) return [];

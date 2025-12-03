@@ -25,10 +25,18 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async search(query, page = 1) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
-      // E-Hentai search via HTML scraping
-      const searchUrl = `${this.baseUrl}/?f_search=${encodeURIComponent(query)}&page=${page - 1}`;
+      // Build search query with tags
+      let searchQuery = query || '';
+      if (tags.length > 0) {
+        searchQuery += ' ' + tags.map(t => `"${t}$"`).join(' ');
+      }
+      if (excludeTags.length > 0) {
+        searchQuery += ' ' + excludeTags.map(t => `-"${t}$"`).join(' ');
+      }
+      
+      const searchUrl = `${this.baseUrl}/?f_search=${encodeURIComponent(searchQuery.trim())}&page=${page - 1}`;
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
       return this.parseGalleryList($);
@@ -38,8 +46,13 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
+      // If tags provided, use search instead
+      if (tags.length > 0 || excludeTags.length > 0) {
+        return this.search('', page, includeAdult, tags, excludeTags);
+      }
+      
       // Popular galleries (front page sorted by favorites)
       const $ = await this.fetch(`${this.baseUrl}/popular?page=${page - 1}`);
       if (!$) return [];
@@ -50,8 +63,13 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
     try {
+      // If tags provided, use search
+      if (tags.length > 0 || excludeTags.length > 0) {
+        return this.search('', page, includeAdult, tags, excludeTags);
+      }
+      
       const $ = await this.fetch(`${this.baseUrl}/?page=${page - 1}`);
       if (!$) return [];
       return this.parseGalleryList($);

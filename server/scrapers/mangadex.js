@@ -43,7 +43,7 @@ export class MangaDexScraper extends BaseScraper {
     }).filter(Boolean);
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
       const offset = (page - 1) * 24;
       const params = new URLSearchParams();
@@ -53,20 +53,28 @@ export class MangaDexScraper extends BaseScraper {
       params.append('order[followedCount]', 'desc');
       params.append('hasAvailableChapters', 'true');
       
-      // Content ratings - for adult only, ONLY request adult content
-      if (adultOnly) {
+      // Content ratings
+      params.append('contentRating[]', 'safe');
+      params.append('contentRating[]', 'suggestive');
+      if (includeAdult) {
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
-      } else {
-        params.append('contentRating[]', 'safe');
-        params.append('contentRating[]', 'suggestive');
-        if (includeAdult) {
-          params.append('contentRating[]', 'erotica');
-          params.append('contentRating[]', 'pornographic');
-        }
       }
       
       if (query) params.set('title', query);
+      
+      // Add status filter - MangaDex uses status[] parameter
+      if (status) {
+        const statusMap = {
+          'ongoing': 'ongoing',
+          'completed': 'completed',
+          'hiatus': 'hiatus',
+          'cancelled': 'cancelled',
+        };
+        if (statusMap[status]) {
+          params.append('status[]', statusMap[status]);
+        }
+      }
       
       // Add tag filtering using MangaDex API
       if (tags.length > 0) {
@@ -87,8 +95,8 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
-    return this.search('', page, includeAdult, tags, excludeTags, adultOnly);
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+    return this.search('', page, includeAdult, tags, excludeTags, status);
   }
 
   async getLatest(page = 1, includeAdult = true) {

@@ -48,7 +48,7 @@ export const sources = {
     contentTypes: ['manga', 'manhwa', 'manhua'],
     filters: {
       tags: true,
-      status: false,
+      status: true,
       sort: ['popular', 'latest', 'rating'],
     },
   },
@@ -62,7 +62,7 @@ export const sources = {
     contentTypes: ['manga', 'manhwa', 'manhua'],
     filters: {
       tags: true,
-      status: false,
+      status: true,
       sort: ['popular', 'latest'],
     },
   },
@@ -139,6 +139,7 @@ export async function search(query, options = {}) {
     page = 1,
     tags = [],
     excludeTags = [],
+    status = null,
   } = options;
 
   const cacheKey = `search:${query}:${JSON.stringify(options)}`;
@@ -153,8 +154,8 @@ export async function search(query, options = {}) {
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass tags and adultOnly to scrapers that support native filtering (like MangaDex)
-        const data = await scraper.search(query, page, includeAdult || adultOnly, tags, excludeTags, adultOnly);
+        // Pass all filter options to scrapers
+        const data = await scraper.search(query, page, includeAdult || adultOnly, tags, excludeTags, status);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Search error:`, e.message);
@@ -173,7 +174,7 @@ export async function search(query, options = {}) {
 
 // Get popular manga
 export async function getPopular(options = {}) {
-  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, tags = [], excludeTags = [] } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, tags = [], excludeTags = [], status = null } = options;
 
   const cacheKey = `popular:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
@@ -187,8 +188,8 @@ export async function getPopular(options = {}) {
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass tags and adultOnly to scrapers that support native filtering
-        const data = await scraper.getPopular(page, includeAdult || adultOnly, tags, excludeTags, adultOnly);
+        // Pass all filter options to scrapers
+        const data = await scraper.getPopular(page, includeAdult || adultOnly, tags, excludeTags, status);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Popular error:`, e.message);
@@ -207,7 +208,7 @@ export async function getPopular(options = {}) {
 
 // Get latest updates
 export async function getLatest(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+  const { sourceIds = null, includeAdult = false, page = 1, tags = [], excludeTags = [], status = null } = options;
 
   const cacheKey = `latest:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
@@ -221,8 +222,8 @@ export async function getLatest(options = {}) {
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass includeAdult to scrapers that support it
-        const data = await scraper.getLatest(page, includeAdult);
+        // Pass all filter options to scrapers
+        const data = await scraper.getLatest(page, includeAdult, tags, excludeTags, status);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Latest error:`, e.message);
