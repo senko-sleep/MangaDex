@@ -1,5 +1,7 @@
 import NodeCache from 'node-cache';
 import MangaDexScraper from './mangadex.js';
+import { KitsuScraper } from './kitsu.js';
+import { MangaUpdatesScraper } from './mangaupdates.js';
 import NHentaiScraper from './nhentai.js';
 import { EHentaiScraper } from './ehentai.js';
 import { IMHentaiScraper } from './imhentai.js';
@@ -9,8 +11,10 @@ const cache = new NodeCache({ stdTTL: 300 });
 
 // Initialize scrapers - only working ones
 const scrapers = {
-  // Mainstream manga sources (MangaDex API is reliable)
+  // Mainstream manga sources
   mangadex: new MangaDexScraper(),
+  kitsu: new KitsuScraper(),
+  mangaupdates: new MangaUpdatesScraper(),
   // Adult content sources (using direct APIs)
   nhentai: new NHentaiScraper(),
   ehentai: new EHentaiScraper(),
@@ -28,11 +32,38 @@ export const sources = {
     enabled: true,
     description: 'Official API, reliable',
     contentTypes: ['manga', 'manhwa', 'manhua', 'oneshot'],
-    // Supported filters for this source
     filters: {
-      tags: true,           // Supports tag filtering via API
-      status: true,         // Supports status filter (ongoing/completed)
-      sort: ['popular', 'latest', 'updated', 'rating'],  // Supported sort options
+      tags: true,
+      status: true,
+      sort: ['popular', 'latest', 'updated', 'rating'],
+    },
+  },
+  kitsu: {
+    id: 'kitsu',
+    name: 'Kitsu',
+    icon: '🦊',
+    isAdult: false,
+    enabled: true,
+    description: 'Anime/Manga database',
+    contentTypes: ['manga', 'manhwa', 'manhua'],
+    filters: {
+      tags: true,
+      status: false,
+      sort: ['popular', 'latest', 'rating'],
+    },
+  },
+  mangaupdates: {
+    id: 'mangaupdates',
+    name: 'MangaUpdates',
+    icon: '📚',
+    isAdult: false,
+    enabled: true,
+    description: 'Comprehensive manga database',
+    contentTypes: ['manga', 'manhwa', 'manhua'],
+    filters: {
+      tags: true,
+      status: false,
+      sort: ['popular', 'latest'],
     },
   },
   // Adult content sources
