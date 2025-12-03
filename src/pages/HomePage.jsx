@@ -172,24 +172,29 @@ export default function HomePage() {
   const location = useLocation();
   
   // Check if we need to restore scroll (check sessionStorage directly)
-  const scrollToMangaId = sessionStorage.getItem('scrollToMangaId');
-  const shouldRestore = !!scrollToMangaId;
+  // This must be checked BEFORE any state initialization
+  const scrollToMangaIdRef = useRef(sessionStorage.getItem('scrollToMangaId'));
+  const shouldRestore = !!scrollToMangaIdRef.current;
   
   // Get saved state for restoration (only on initial mount)
   const savedStateRef = useRef(getSavedState());
   const savedState = savedStateRef.current;
-  const shouldSkipInitialFetch = useRef(shouldRestore && !!savedState?.manga?.length);
+  
+  // Determine if we should skip fetch - we have saved manga AND a manga to scroll to
+  const shouldSkipFetch = shouldRestore && !!savedState?.manga?.length;
   
   // Check if we're navigating back from manga details
   const restoreScrollFromNav = location.state?.restoreScroll || shouldRestore;
   const filterSourceFromNav = location.state?.filterSource;
   
+  // Initialize state from saved state if restoring
   const [manga, setManga] = useState(savedState?.manga || []);
   const [newManga, setNewManga] = useState([]);
   const [recentlyUpdated, setRecentlyUpdated] = useState([]);
   const [sectionsLoading, setSectionsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(!savedState?.manga?.length);
+  // If we're restoring, don't show initial load skeleton
+  const [initialLoad, setInitialLoad] = useState(shouldSkipFetch ? false : !savedState?.manga?.length);
   const [query, setQuery] = useState(savedState?.search || '');
   const [search, setSearch] = useState(savedState?.search || '');
   const [page, setPage] = useState(savedState?.page || 1);
@@ -456,6 +461,7 @@ export default function HomePage() {
 
   // Track if this is the initial mount to prevent double-fetch
   const isInitialMount = useRef(true);
+  const didSkipInitialFetch = useRef(false);
   
   // Reset and fetch when filters change (skip if restoring from saved state)
   useEffect(() => {
@@ -463,21 +469,18 @@ export default function HomePage() {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       
-      // Check if we have a manga ID to scroll to - means we're restoring
-      const hasMangaToScrollTo = sessionStorage.getItem('scrollToMangaId');
-      
-      // If we have saved manga and need to restore, skip fetch
-      if (hasMangaToScrollTo && savedState?.manga?.length > 0) {
-        console.log('[MangaFox] Restoring scroll position, skipping fetch');
+      // If we determined at mount time that we should skip fetch, do so
+      if (shouldSkipFetch) {
+        didSkipInitialFetch.current = true;
+        console.log('[MangaFox] Restoring from saved state, skipping initial fetch. Manga count:', savedState?.manga?.length);
         return;
       }
-      
-      if (shouldSkipInitialFetch.current && manga.length > 0) {
-        shouldSkipInitialFetch.current = false;
-        console.log('[MangaFox] Restored from saved state, skipping initial fetch');
-        return;
-      }
-      shouldSkipInitialFetch.current = false;
+    }
+    
+    // If we skipped initial fetch and this is a subsequent render with same filters, skip
+    if (didSkipInitialFetch.current) {
+      didSkipInitialFetch.current = false;
+      return;
     }
     
     console.log('[MangaFox] Filters changed, fetching...');
@@ -504,13 +507,14 @@ export default function HomePage() {
   
   // Scroll to the specific manga element when we have content
   useEffect(() => {
-    // Check sessionStorage directly each time
-    const savedMangaId = sessionStorage.getItem('scrollToMangaId');
+    // Use the ref we captured at mount time
+    const savedMangaId = scrollToMangaIdRef.current;
     
     // Only attempt restoration once per mount when we have content and a saved ID
     if (hasRestoredScroll.current || manga.length === 0 || !savedMangaId) return;
     
     const elementId = getMangaElementId(savedMangaId);
+    console.log('[MangaFox] Attempting to scroll to manga:', savedMangaId, 'element:', elementId);
     
     // Mark as restored immediately to prevent re-runs
     hasRestoredScroll.current = true;
@@ -525,6 +529,7 @@ export default function HomePage() {
       const element = document.getElementById(elementId);
       
       if (element) {
+        console.log('[MangaFox] Found element, scrolling to it');
         // Found the element - scroll to it with some offset from top
         element.scrollIntoView({ behavior: 'instant', block: 'center' });
         // Add a highlight effect
@@ -532,18 +537,22 @@ export default function HomePage() {
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-orange-500');
         }, 1500);
-        // Clear saved state
+        // Clear saved state after successful scroll
         clearSavedState();
+        scrollToMangaIdRef.current = null;
       } else if (attempts < 50) {
-        // Document not tall enough yet, wait for more content/images to load
+        // Element not found yet, wait for render
         requestAnimationFrame(() => {
           setTimeout(() => attemptScroll(attempts + 1), 50);
         });
+      } else {
+        console.log('[MangaFox] Could not find element after 50 attempts');
+        clearSavedState();
       }
     };
     
-    // Start attempting scroll immediately
-    attemptScroll();
+    // Start attempting scroll after a brief delay for initial render
+    setTimeout(() => attemptScroll(), 100);
   }, [manga.length]);
 
   const handleSearch = (e) => {
