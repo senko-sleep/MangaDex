@@ -175,7 +175,7 @@ export async function search(query, options = {}) {
       try {
         const scraper = scrapers[sourceId];
         // Pass all filter options to scrapers
-        const data = await scraper.search(query, page, includeAdult || adultOnly, tags, excludeTags, status);
+        const data = await scraper.search(query, page, includeAdult || adultOnly, tags, excludeTags, status, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Search error:`, e.message);
@@ -209,7 +209,7 @@ export async function getPopular(options = {}) {
       try {
         const scraper = scrapers[sourceId];
         // Pass all filter options to scrapers
-        const data = await scraper.getPopular(page, includeAdult || adultOnly, tags, excludeTags, status);
+        const data = await scraper.getPopular(page, includeAdult || adultOnly, tags, excludeTags, status, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Popular error:`, e.message);
@@ -228,7 +228,7 @@ export async function getPopular(options = {}) {
 
 // Get latest updates
 export async function getLatest(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1, tags = [], excludeTags = [], status = null } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, tags = [], excludeTags = [], status = null } = options;
 
   const cacheKey = `latest:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
@@ -236,14 +236,14 @@ export async function getLatest(options = {}) {
 
   const targetSources = sourceIds 
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
         // Pass all filter options to scrapers
-        const data = await scraper.getLatest(page, includeAdult, tags, excludeTags, status);
+        const data = await scraper.getLatest(page, includeAdult || adultOnly, tags, excludeTags, status, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] Latest error:`, e.message);

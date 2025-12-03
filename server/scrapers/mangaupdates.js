@@ -72,22 +72,27 @@ export class MangaUpdatesScraper extends BaseScraper {
     };
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false) {
     try {
       const perPage = 24;
       
       const body = {
-        search: query,
+        search: query || 'a',  // API requires search term
         page: page,
         perpage: perPage,
       };
 
-      // Add genre filter if tags provided
+      // Add genre filter if tags provided - use 'genre' not 'include_genre'
       if (tags.length > 0) {
-        body.include_genre = tags;
+        body.genre = tags;
       }
       if (excludeTags.length > 0) {
         body.exclude_genre = excludeTags;
+      }
+      
+      // If adultOnly mode, filter for Adult/Hentai content
+      if (adultOnly) {
+        body.genre = [...(body.genre || []), 'Adult'];
       }
       
       // Add status filter - MangaUpdates uses 'filter' parameter
@@ -102,8 +107,8 @@ export class MangaUpdatesScraper extends BaseScraper {
 
       let results = res.data.results.map(r => this.formatManga(r.record));
       
-      // Filter adult content if needed
-      if (!includeAdult) {
+      // Filter adult content if needed (for SFW mode)
+      if (!includeAdult && !adultOnly) {
         results = results.filter(m => !m.isAdult);
       }
 
@@ -114,20 +119,26 @@ export class MangaUpdatesScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false) {
     try {
       const body = {
+        search: 'a',  // API requires search term
         page: page,
         perpage: 24,
         orderby: 'rating',
       };
       
-      // Add genre filter if tags provided
+      // Add genre filter if tags provided - use 'genre' not 'include_genre'
       if (tags.length > 0) {
-        body.include_genre = tags;
+        body.genre = tags;
       }
       if (excludeTags.length > 0) {
         body.exclude_genre = excludeTags;
+      }
+      
+      // If adultOnly mode, filter for Adult content
+      if (adultOnly) {
+        body.genre = [...(body.genre || []), 'Adult'];
       }
       
       // Add status filter - MangaUpdates uses 'filter' parameter
@@ -142,7 +153,8 @@ export class MangaUpdatesScraper extends BaseScraper {
 
       let results = res.data.results.map(r => this.formatManga(r.record));
       
-      if (!includeAdult) {
+      // Filter adult content if needed (for SFW mode)
+      if (!includeAdult && !adultOnly) {
         results = results.filter(m => !m.isAdult);
       }
 
@@ -153,20 +165,26 @@ export class MangaUpdatesScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false) {
     try {
       const body = {
+        search: 'a',  // API requires search term
         page: page,
         perpage: 24,
         orderby: 'year', // Sort by newest
       };
       
-      // Add genre filter if tags provided
+      // Add genre filter if tags provided - use 'genre' not 'include_genre'
       if (tags.length > 0) {
-        body.include_genre = tags;
+        body.genre = tags;
       }
       if (excludeTags.length > 0) {
         body.exclude_genre = excludeTags;
+      }
+      
+      // If adultOnly mode, filter for Adult content
+      if (adultOnly) {
+        body.genre = [...(body.genre || []), 'Adult'];
       }
       
       // Add status filter - MangaUpdates uses 'filter' parameter
@@ -181,7 +199,8 @@ export class MangaUpdatesScraper extends BaseScraper {
 
       let results = res.data.results.map(r => this.formatManga(r.record));
       
-      if (!includeAdult) {
+      // Filter adult content if needed (for SFW mode)
+      if (!includeAdult && !adultOnly) {
         results = results.filter(m => !m.isAdult);
       }
 
