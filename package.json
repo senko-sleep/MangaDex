@@ -27,6 +27,7 @@
     "lucide-react": "^0.454.0",
     "mangadex-full-api": "^6.2.0",
     "node-cache": "^5.1.2",
+    "playwright": "^1.57.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-medium-image-zoom": "^5.2.3",

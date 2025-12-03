@@ -45,9 +45,9 @@ export class MangaDexScraper extends BaseScraper {
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50'); // Max allowed by MangaDex API
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[followedCount]', 'desc');
@@ -101,10 +101,10 @@ export class MangaDexScraper extends BaseScraper {
 
   async getLatest(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       // Build params with multiple content ratings
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50'); // Max allowed
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[latestUploadedChapter]', 'desc');
@@ -126,9 +126,9 @@ export class MangaDexScraper extends BaseScraper {
 
   async getNewlyAdded(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50');
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[createdAt]', 'desc');
@@ -151,9 +151,9 @@ export class MangaDexScraper extends BaseScraper {
 
   async getTopRated(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50');
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[rating]', 'desc');

@@ -303,14 +303,9 @@ export default function MangaDetailPage() {
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <button 
               onClick={() => {
-                // Navigate to home with the source that this manga came from
-                // This ensures the user goes back to browsing the same source
-                const navSourceId = location.state?.sourceId || sourceId;
-                if (navSourceId) {
-                  navigate('/', { state: { filterSource: navSourceId } });
-                } else {
-                  navigate('/');
-                }
+                // Navigate to home and restore scroll position
+                // The scroll position is already saved when user clicked the manga
+                navigate('/', { state: { restoreScroll: true } });
               }}
               className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors flex items-center gap-2"
             >

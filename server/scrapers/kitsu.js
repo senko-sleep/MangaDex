@@ -82,15 +82,12 @@ export class KitsuScraper extends BaseScraper {
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
-      const offset = (page - 1) * 20;
-      const params = new URLSearchParams({
-        'page[limit]': '20',
-        'page[offset]': String(offset),
-        'include': 'genres,categories',
-      });
+      const offset = (page - 1) * 20; // Kitsu max is 20
+      // Build URL manually to avoid bracket encoding issues
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}`; // Kitsu max is 20
       
       if (query) {
-        params.set('filter[text]', query);
+        url += `&filter[text]=${encodeURIComponent(query)}`;
       }
       
       // Map status to Kitsu's status values
@@ -100,15 +97,15 @@ export class KitsuScraper extends BaseScraper {
           'completed': 'finished',
           'hiatus': 'tba',
         };
-        params.set('filter[status]', statusMap[status] || status);
+        url += `&filter[status]=${statusMap[status] || status}`;
       }
       
       // Add genre filter if tags provided
       if (tags.length > 0) {
-        params.set('filter[genres]', tags.join(','));
+        url += `&filter[genres]=${encodeURIComponent(tags.join(','))}`;
       }
 
-      const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
+      const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
       return data.data.map(item => this.formatManga(item));
@@ -120,13 +117,9 @@ export class KitsuScraper extends BaseScraper {
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
-      const offset = (page - 1) * 20;
-      const params = new URLSearchParams({
-        'page[limit]': '20',
-        'page[offset]': String(offset),
-        'sort': '-userCount',
-        'include': 'genres',
-      });
+      const offset = (page - 1) * 20; // Kitsu max is 20
+      // Build URL manually to avoid bracket encoding issues
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-userCount`;
       
       // Map status to Kitsu's status values
       if (status) {
@@ -135,15 +128,15 @@ export class KitsuScraper extends BaseScraper {
           'completed': 'finished',
           'hiatus': 'tba',
         };
-        params.set('filter[status]', statusMap[status] || status);
+        url += `&filter[status]=${statusMap[status] || status}`;
       }
       
       // Add genre filter if tags provided
       if (tags.length > 0) {
-        params.set('filter[genres]', tags.join(','));
+        url += `&filter[genres]=${encodeURIComponent(tags.join(','))}`;
       }
 
-      const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
+      const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
       return data.data.map(item => this.formatManga(item));
@@ -155,13 +148,9 @@ export class KitsuScraper extends BaseScraper {
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
     try {
-      const offset = (page - 1) * 20;
-      const params = new URLSearchParams({
-        'page[limit]': '20',
-        'page[offset]': String(offset),
-        'sort': '-updatedAt',
-        'include': 'genres',
-      });
+      const offset = (page - 1) * 20; // Kitsu max is 20
+      // Build URL manually to avoid bracket encoding issues
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-updatedAt`;
       
       // Map status to Kitsu's status values
       if (status) {
@@ -170,15 +159,15 @@ export class KitsuScraper extends BaseScraper {
           'completed': 'finished',
           'hiatus': 'tba',
         };
-        params.set('filter[status]', statusMap[status] || status);
+        url += `&filter[status]=${statusMap[status] || status}`;
       }
       
       // Add genre filter if tags provided
       if (tags.length > 0) {
-        params.set('filter[genres]', tags.join(','));
+        url += `&filter[genres]=${encodeURIComponent(tags.join(','))}`;
       }
 
-      const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
+      const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
       return data.data.map(item => this.formatManga(item));
@@ -190,15 +179,10 @@ export class KitsuScraper extends BaseScraper {
 
   async getNewlyAdded(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 20;
-      const params = new URLSearchParams({
-        'page[limit]': '20',
-        'page[offset]': String(offset),
-        'sort': '-createdAt',
-        'include': 'genres',
-      });
+      const offset = (page - 1) * 20; // Kitsu max is 20
+      const url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-createdAt`;
 
-      const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
+      const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
       return data.data.map(item => this.formatManga(item));
@@ -210,15 +194,10 @@ export class KitsuScraper extends BaseScraper {
 
   async getTopRated(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 20;
-      const params = new URLSearchParams({
-        'page[limit]': '20',
-        'page[offset]': String(offset),
-        'sort': '-averageRating',
-        'include': 'genres',
-      });
+      const offset = (page - 1) * 20; // Kitsu max is 20
+      const url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-averageRating`;
 
-      const data = await this.fetchJson(`${this.baseUrl}/manga?${params}`);
+      const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
       return data.data.map(item => this.formatManga(item));

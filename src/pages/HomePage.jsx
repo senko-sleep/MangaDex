@@ -12,10 +12,14 @@ import { getCoverUrl } from '../lib/imageUtils';
 import Logo from '../components/Logo';
 
 // Save state before navigating to manga details
-const saveHomeState = (state) => {
+const saveHomeState = (state, mangaId) => {
   sessionStorage.setItem('homeScrollPosition', window.scrollY.toString());
   sessionStorage.setItem('homeState', JSON.stringify(state));
   sessionStorage.setItem('homeStateTimestamp', Date.now().toString());
+  // Save the manga ID to scroll to when returning
+  if (mangaId) {
+    sessionStorage.setItem('scrollToMangaId', mangaId);
+  }
 };
 
 // Get saved state from sessionStorage
@@ -38,19 +42,28 @@ const clearSavedState = () => {
   sessionStorage.removeItem('homeState');
   sessionStorage.removeItem('homeScrollPosition');
   sessionStorage.removeItem('homeStateTimestamp');
+  sessionStorage.removeItem('scrollToMangaId');
+};
+
+// Create a safe DOM ID from manga ID
+const getMangaElementId = (mangaId) => {
+  return `manga-${mangaId.replace(/[^a-zA-Z0-9]/g, '-')}`;
 };
 
 // Manga Card Component
 function MangaCard({ manga, index, onNavigate }) {
   const cover = getCoverUrl(manga);
   const sourceId = manga.sourceId || manga.id?.split(':')[0];
+  const elementId = getMangaElementId(manga.id);
+  
   return (
     <Link 
+      id={elementId}
       to={`/manga/${encodeURIComponent(manga.id)}`}
       state={{ sourceId }}
       className="group relative fade-in"
       style={{ animationDelay: `${Math.min(index, 20) * 20}ms` }}
-      onClick={onNavigate}
+      onClick={() => onNavigate(manga.id)}
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
         {/* Cover Image */}
@@ -158,12 +171,17 @@ function MangaSkeleton() {
 export default function HomePage() {
   const location = useLocation();
   
+  // Check if we need to restore scroll (check sessionStorage directly)
+  const scrollToMangaId = sessionStorage.getItem('scrollToMangaId');
+  const shouldRestore = !!scrollToMangaId;
+  
   // Get saved state for restoration (only on initial mount)
   const savedStateRef = useRef(getSavedState());
   const savedState = savedStateRef.current;
-  const shouldSkipInitialFetch = useRef(!!savedState?.manga?.length);
+  const shouldSkipInitialFetch = useRef(shouldRestore && !!savedState?.manga?.length);
   
-  // Check if we're navigating back from manga details with a source filter
+  // Check if we're navigating back from manga details
+  const restoreScrollFromNav = location.state?.restoreScroll || shouldRestore;
   const filterSourceFromNav = location.state?.filterSource;
   
   const [manga, setManga] = useState(savedState?.manga || []);
@@ -184,7 +202,7 @@ export default function HomePage() {
   const [contentTypes, setContentTypes] = useState([]);
   const [contentType, setContentType] = useState(savedState?.contentType || 'all');
   const [contentRating, setContentRating] = useState(savedState?.contentRating || 'safe');
-  const [showAdult, setShowAdult] = useState(savedState?.showAdult || false);
+  // showAdult is derived from contentRating, not a separate state
   const [statusFilter, setStatusFilter] = useState(savedState?.statusFilter || 'all');
   const [sortBy, setSortBy] = useState(savedState?.sortBy || 'popular');
   const [allTags, setAllTags] = useState([]);
@@ -202,13 +220,12 @@ export default function HomePage() {
   const recentlyUpdatedRef = useRef(null);
   
   // Function to save current state before navigating
-  const handleNavigateToManga = useCallback(() => {
+  const handleNavigateToManga = useCallback((mangaId) => {
     saveHomeState({
       search,
       contentRating,
       contentType,
       selectedSources,
-      showAdult,
       statusFilter,
       sortBy,
       selectedTags,
@@ -217,8 +234,8 @@ export default function HomePage() {
       manga,
       page,
       hasMore,
-    });
-  }, [search, contentRating, contentType, selectedSources, showAdult, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, page, hasMore]);
+    }, mangaId);
+  }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, page, hasMore]);
 
   // Fetch homepage sections (new manga, recently updated)
   useEffect(() => {
@@ -246,25 +263,40 @@ export default function HomePage() {
     fetchSections();
   }, []);
 
-  // Load sources on mount - when showAdult is true, only show NSFW sources
+  // Load sources based on content rating
+  // safe → SFW only, all → all sources, adult → NSFW only
   useEffect(() => {
-    const adultOnly = showAdult ? 'true' : 'false';
-    fetch(apiUrl(`/api/sources?adult=${showAdult}&adultOnly=${adultOnly}`)).then(r => r.json()).then(d => {
+    let adult = 'false';
+    let adultOnly = 'false';
+    
+    if (contentRating === 'safe') {
+      adult = 'false';
+      adultOnly = 'false';
+    } else if (contentRating === 'all') {
+      adult = 'true';
+      adultOnly = 'false';
+    } else if (contentRating === 'adult') {
+      adult = 'true';
+      adultOnly = 'true';
+    }
+    
+    fetch(apiUrl(`/api/sources?adult=${adult}&adultOnly=${adultOnly}`)).then(r => r.json()).then(d => {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
       setContentTypes(d.contentTypes || []);
       // Clear selected sources when switching modes to avoid selecting unavailable sources
       setSelectedSources([]);
     }).catch(() => {});
-  }, [showAdult]);
+  }, [contentRating]);
 
-  // Fetch tags when selected sources or adult setting changes
+  // Fetch tags when selected sources or content rating changes
   useEffect(() => {
     const fetchTags = async () => {
       setTagsLoading(true);
       try {
         const sourcesParam = selectedSources.length > 0 ? `&sources=${selectedSources.join(',')}` : '';
-        const res = await fetch(apiUrl(`/api/tags?adult=${showAdult}${sourcesParam}`));
+        const adultParam = contentRating !== 'safe';
+        const res = await fetch(apiUrl(`/api/tags?adult=${adultParam}${sourcesParam}`));
         const data = await res.json();
         setAllTags(data.tags || []);
         setTagsBySource(data.bySource || {});
@@ -274,7 +306,7 @@ export default function HomePage() {
       setTagsLoading(false);
     };
     fetchTags();
-  }, [selectedSources, showAdult]);
+  }, [selectedSources, contentRating]);
   
   // Handle source filter from navigation (when coming back from manga details)
   useEffect(() => {
@@ -338,21 +370,57 @@ export default function HomePage() {
     return apiUrl(`/api/manga/search?${params}`);
   }, [search, selectedTags, excludedTags, contentRating, contentType, selectedSources, statusFilter, sortBy]);
 
+  // Prefetch cache for next page
+  const prefetchCache = useRef(new Map());
+  const prefetchInProgress = useRef(new Set());
+
+  // Prefetch next page in background
+  const prefetchNextPage = useCallback(async (nextPage) => {
+    const url = buildUrl(nextPage);
+    const cacheKey = url;
+    
+    // Skip if already cached or in progress
+    if (prefetchCache.current.has(cacheKey) || prefetchInProgress.current.has(cacheKey)) {
+      return;
+    }
+    
+    prefetchInProgress.current.add(cacheKey);
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        prefetchCache.current.set(cacheKey, json.data || []);
+      }
+    } catch {
+      // Silent fail for prefetch
+    } finally {
+      prefetchInProgress.current.delete(cacheKey);
+    }
+  }, [buildUrl]);
+
   const fetchManga = useCallback(async (reset = false) => {
     if (loading) return;
     setLoading(true);
     try {
       const p = reset ? 1 : page;
       const url = buildUrl(p);
-      console.log('[MangaFox] Fetching manga:', url);
+      const cacheKey = url;
       
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      // Check prefetch cache first
+      let data;
+      if (!reset && prefetchCache.current.has(cacheKey)) {
+        data = prefetchCache.current.get(cacheKey);
+        prefetchCache.current.delete(cacheKey);
+        console.log('[MangaFox] Using prefetched data for page', p);
+      } else {
+        console.log('[MangaFox] Fetching manga:', url);
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        const json = await res.json();
+        data = json.data || [];
       }
-      
-      const json = await res.json();
-      let data = json.data || [];
       
       // Filter out safe content when 18+ only is selected
       if (contentRating === 'adult') {
@@ -364,16 +432,27 @@ export default function HomePage() {
       }
       
       setManga(prev => reset ? data : [...prev, ...data]);
-      setPage(p + 1);
+      const nextPage = p + 1;
+      setPage(nextPage);
       setHasMore(data.length >= 20);
       setInitialLoad(false);
+      
+      // Prefetch next page immediately after loading current
+      if (data.length >= 20) {
+        prefetchNextPage(nextPage);
+      }
     } catch (e) {
       console.error('[MangaFox] Error fetching manga:', e.message);
       console.error('[MangaFox] Full error:', e);
       setInitialLoad(false);
     }
     setLoading(false);
-  }, [page, loading, buildUrl, contentRating]);
+  }, [page, loading, buildUrl, contentRating, prefetchNextPage]);
+  
+  // Clear prefetch cache when filters change
+  useEffect(() => {
+    prefetchCache.current.clear();
+  }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
   // Track if this is the initial mount to prevent double-fetch
   const isInitialMount = useRef(true);
@@ -383,6 +462,16 @@ export default function HomePage() {
     // Skip the first fetch if we're restoring from saved state with manga loaded
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      
+      // Check if we have a manga ID to scroll to - means we're restoring
+      const hasMangaToScrollTo = sessionStorage.getItem('scrollToMangaId');
+      
+      // If we have saved manga and need to restore, skip fetch
+      if (hasMangaToScrollTo && savedState?.manga?.length > 0) {
+        console.log('[MangaFox] Restoring scroll position, skipping fetch');
+        return;
+      }
+      
       if (shouldSkipInitialFetch.current && manga.length > 0) {
         shouldSkipInitialFetch.current = false;
         console.log('[MangaFox] Restored from saved state, skipping initial fetch');
@@ -391,70 +480,70 @@ export default function HomePage() {
       shouldSkipInitialFetch.current = false;
     }
     
-    console.log('[MangaFox] Filters changed:', { search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags });
+    console.log('[MangaFox] Filters changed, fetching...');
     setManga([]);
     setPage(1);
     setHasMore(true);
     fetchManga(true);
   }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
-  // Infinite scroll
+  // Infinite scroll - trigger early with larger rootMargin for smoother loading
   useEffect(() => {
     const obs = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loading) fetchManga();
-    }, { threshold: 0.1 });
+    }, { 
+      threshold: 0.1,
+      rootMargin: '400px' // Start loading 400px before reaching the loader
+    });
     if (loader.current) obs.observe(loader.current);
     return () => obs.disconnect();
   }, [hasMore, loading, fetchManga]);
 
   // Track if scroll has been restored to prevent multiple attempts
   const hasRestoredScroll = useRef(false);
-  const pendingScrollRestore = useRef(null);
   
-  // Restore scroll position when returning from manga details
+  // Scroll to the specific manga element when we have content
   useEffect(() => {
-    // Check for saved scroll position on mount
-    const savedPosition = sessionStorage.getItem('homeScrollPosition');
-    if (savedPosition) {
-      const scrollY = parseInt(savedPosition, 10);
-      if (scrollY > 0) {
-        pendingScrollRestore.current = scrollY;
-      }
-    }
-  }, []);
-  
-  // Actually restore scroll when we have content
-  useEffect(() => {
-    // Only attempt restoration once per mount when we have content
-    if (hasRestoredScroll.current || manga.length === 0 || !pendingScrollRestore.current) return;
+    // Check sessionStorage directly each time
+    const savedMangaId = sessionStorage.getItem('scrollToMangaId');
     
-    const scrollY = pendingScrollRestore.current;
+    // Only attempt restoration once per mount when we have content and a saved ID
+    if (hasRestoredScroll.current || manga.length === 0 || !savedMangaId) return;
+    
+    const elementId = getMangaElementId(savedMangaId);
     
     // Mark as restored immediately to prevent re-runs
     hasRestoredScroll.current = true;
-    pendingScrollRestore.current = null;
     
-    // Function to attempt scroll restoration
+    // Disable browser's automatic scroll restoration
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+    
+    // Function to attempt scroll to element
     const attemptScroll = (attempts = 0) => {
-      // Check if document is tall enough to scroll to the saved position
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const element = document.getElementById(elementId);
       
-      if (scrollY <= maxScroll || attempts >= 15) {
-        // Can scroll to position or max attempts reached
-        window.scrollTo({ top: Math.min(scrollY, maxScroll), behavior: 'instant' });
+      if (element) {
+        // Found the element - scroll to it with some offset from top
+        element.scrollIntoView({ behavior: 'instant', block: 'center' });
+        // Add a highlight effect
+        element.classList.add('ring-2', 'ring-orange-500');
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-orange-500');
+        }, 1500);
+        // Clear saved state
         clearSavedState();
-      } else {
-        // Document not tall enough yet, wait for more content to load
+      } else if (attempts < 50) {
+        // Document not tall enough yet, wait for more content/images to load
         requestAnimationFrame(() => {
-          setTimeout(() => attemptScroll(attempts + 1), 100);
+          setTimeout(() => attemptScroll(attempts + 1), 50);
         });
       }
     };
     
-    // Start attempting scroll after a brief delay for initial render
-    const timeoutId = setTimeout(() => attemptScroll(), 100);
-    
-    return () => clearTimeout(timeoutId);
+    // Start attempting scroll immediately
+    attemptScroll();
   }, [manga.length]);
 
   const handleSearch = (e) => {
@@ -480,7 +569,6 @@ export default function HomePage() {
     setSelectedSources([]);
     setStatusFilter('all');
     setSortBy('popular');
-    setShowAdult(false);
   };
 
   // Toggle source selection
@@ -705,7 +793,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => { setContentRating('safe'); setShowAdult(false); }}
+                      onClick={() => setContentRating('safe')}
                       className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                         contentRating === 'safe' 
                           ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' 
@@ -716,7 +804,7 @@ export default function HomePage() {
                       Safe
                     </button>
                     <button
-                      onClick={() => { setContentRating('all'); setShowAdult(true); }}
+                      onClick={() => setContentRating('all')}
                       className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                         contentRating === 'all' 
                           ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' 
@@ -727,7 +815,7 @@ export default function HomePage() {
                       All
                     </button>
                     <button
-                      onClick={() => { setContentRating('adult'); setShowAdult(true); }}
+                      onClick={() => setContentRating('adult')}
                       className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                         contentRating === 'adult' 
                           ? 'bg-red-500 text-white shadow-lg shadow-red-500/25' 

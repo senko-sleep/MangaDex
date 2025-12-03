@@ -48,7 +48,8 @@ const ALL_CONTENT_TYPES = [
  * Returns all available sources with their status and content types
  * 
  * Query params:
- * - adult: true/false - include adult sources (default: true)
+ * - adult: true/false - include adult sources (default: false for safe mode)
+ * - adultOnly: true/false - show ONLY adult sources (for 18+ mode)
  * - type: filter by content type (manga, doujinshi, artistcg, etc.)
  */
 export async function GET(request) {
@@ -56,15 +57,23 @@ export async function GET(request) {
   
   try {
     const { searchParams } = new URL(request.url);
-    const includeAdult = searchParams.get('adult') !== 'false';
+    const adultParam = searchParams.get('adult');
+    const adultOnlyParam = searchParams.get('adultOnly');
     const contentType = searchParams.get('type');
+    
+    // Parse adult filter parameters
+    // adult=false → safe mode (SFW only)
+    // adult=true, adultOnly=false → all content
+    // adult=true, adultOnly=true → 18+ only mode
+    const includeAdult = adultParam === 'true';
+    const adultOnly = adultOnlyParam === 'true';
     
     // Get all source statuses
     const allStatus = getSourceStatus();
-    const availableSources = getAvailableSources(includeAdult);
+    const availableSources = getAvailableSources(true); // Get all sources first
     
     // Build detailed source info
-    const sources = availableSources.map(name => {
+    let sources = availableSources.map(name => {
       const status = allStatus[name];
       const source = SOURCES[name];
       
@@ -76,9 +85,21 @@ export async function GET(request) {
         adult: status?.adult ?? source?.adult ?? false,
         contentTypes: SOURCE_CONTENT_TYPES[name] || ['manga'],
         features: source?.features || [],
+        filters: source?.filters || {},
         lastCheck: status?.lastCheck || Date.now()
       };
     });
+    
+    // Apply adult filtering logic
+    // adultOnly=true → only show adult sources
+    // includeAdult=true, adultOnly=false → show all sources
+    // includeAdult=false → only show SFW sources
+    if (adultOnly) {
+      sources = sources.filter(s => s.adult);
+    } else if (!includeAdult) {
+      sources = sources.filter(s => !s.adult);
+    }
+    // else: show all sources
     
     // Filter by content type if specified
     let filteredSources = sources;
@@ -110,7 +131,8 @@ export async function GET(request) {
         totalSources: filteredSources.length,
         mainstreamCount: mainstreamSources.length,
         adultCount: adultSources.length,
-        includeAdult
+        includeAdult,
+        adultOnly
       }
     });
   } catch (error) {
