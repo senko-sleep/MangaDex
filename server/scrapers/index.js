@@ -73,12 +73,14 @@ export const sources = {
     icon: '🔞',
     isAdult: true,
     enabled: true,
-    description: 'Doujinshi library (API)',
+    description: 'Doujinshi library',
     contentTypes: ['doujinshi', 'manga'],
     filters: {
-      tags: true,           // Supports tag search in query
-      status: false,        // No status filter
-      sort: ['popular', 'latest'],  // Limited sort options
+      tags: true,
+      status: false,
+      language: true,  // Supports language filter (english, japanese, chinese)
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular', 'latest'],
     },
   },
   ehentai: {
@@ -90,9 +92,11 @@ export const sources = {
     description: 'Largest doujinshi archive',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset', 'cosplay'],
     filters: {
-      tags: true,           // Supports tag search
-      status: false,        // No status filter
-      sort: ['popular'],    // Limited sort
+      tags: true,
+      status: false,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular'],
     },
   },
   imhentai: {
@@ -104,9 +108,11 @@ export const sources = {
     description: 'Large adult content library',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset'],
     filters: {
-      tags: true,           // Supports tag search
-      status: false,        // No status filter
-      sort: ['popular', 'latest'],  // Limited sort
+      tags: true,
+      status: false,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular', 'latest'],
     },
   },
 };

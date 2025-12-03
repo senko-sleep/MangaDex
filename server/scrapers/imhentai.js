@@ -16,10 +16,15 @@ export class IMHentaiScraper extends BaseScraper {
     return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], adultOnly = false) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
       // Build search query - IMHentai supports tag search in query
       let searchQuery = query || '';
+      
+      // Add language filter
+      if (language && language !== 'all') {
+        searchQuery += ` ${language}`;
+      }
       
       // Add tags to search query if provided
       if (tags && tags.length > 0) {
@@ -30,7 +35,7 @@ export class IMHentaiScraper extends BaseScraper {
       
       // If no query at all, return popular instead
       if (!searchQuery) {
-        return this.getPopular(page);
+        return this.getPopular(page, includeAdult, tags, excludeTags, language);
       }
       
       const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
@@ -43,11 +48,11 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // If tags provided, use search
-      if (tags.length > 0 || excludeTags.length > 0) {
-        return this.search('', page, includeAdult, tags, excludeTags);
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', page, includeAdult, tags, excludeTags, language);
       }
       
       const $ = await this.fetch(`${this.baseUrl}/popular/?page=${page}`);
@@ -59,11 +64,11 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // If tags provided, use search
-      if (tags.length > 0 || excludeTags.length > 0) {
-        return this.search('', page, includeAdult, tags, excludeTags);
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', page, includeAdult, tags, excludeTags, language);
       }
       
       const $ = await this.fetch(`${this.baseUrl}/?page=${page}`);

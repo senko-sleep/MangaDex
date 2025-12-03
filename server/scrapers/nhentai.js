@@ -129,11 +129,14 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // If tags provided, use search
-      if (tags.length > 0 || excludeTags.length > 0) {
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         let searchQuery = tags.join(' ');
+        if (language && language !== 'all') {
+          searchQuery += ` language:${language}`;
+        }
         if (excludeTags.length > 0) {
           searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
         }

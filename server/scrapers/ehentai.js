@@ -25,10 +25,16 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
       // Build search query with tags
       let searchQuery = query || '';
+      
+      // Add language filter (english, japanese, chinese)
+      if (language && language !== 'all') {
+        searchQuery += ` language:${language}`;
+      }
+      
       if (tags.length > 0) {
         searchQuery += ' ' + tags.map(t => `"${t}$"`).join(' ');
       }
@@ -46,11 +52,11 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // If tags provided, use search instead
-      if (tags.length > 0 || excludeTags.length > 0) {
-        return this.search('', page, includeAdult, tags, excludeTags);
+      // If tags or language provided, use search instead
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', page, includeAdult, tags, excludeTags, language);
       }
       
       // Popular galleries (front page sorted by favorites)
@@ -63,11 +69,11 @@ export class EHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // If tags provided, use search
-      if (tags.length > 0 || excludeTags.length > 0) {
-        return this.search('', page, includeAdult, tags, excludeTags);
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', page, includeAdult, tags, excludeTags, language);
       }
       
       const $ = await this.fetch(`${this.baseUrl}/?page=${page - 1}`);
