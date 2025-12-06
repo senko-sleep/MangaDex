@@ -763,459 +763,194 @@ export default function HomePage() {
               className="fixed inset-0 bg-black/40 z-40 animate-in fade-in duration-200"
               onClick={() => setShowFilters(false)}
             />
-            <div className="relative z-50 border-t border-white/5 bg-zinc-950/98 backdrop-blur-xl shadow-2xl shadow-black/50 max-h-[70vh] overflow-y-auto scrollbar-thin">
-              <div className="max-w-7xl mx-auto px-4 py-5 slide-up">
+            <div className="relative z-50 border-t border-white/5 bg-zinc-950/98 backdrop-blur-xl shadow-2xl shadow-black/50">
+              <div className="max-w-7xl mx-auto px-4 py-3 slide-up">
               {/* Filter Header */}
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                    <SlidersHorizontal className="w-4 h-4 text-orange-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold">Advanced Filters</h3>
-                    <p className="text-xs text-zinc-500">Refine your search results</p>
-                  </div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-orange-500" />
+                  <h3 className="text-sm font-semibold">Filters</h3>
                 </div>
-                {hasFilters && (
-                  <button 
-                    onClick={clearFilters} 
-                    className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    <X className="w-3 h-3" /> Clear All
+                <div className="flex items-center gap-2">
+                  {hasFilters && (
+                    <button onClick={clearFilters} className="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-md flex items-center gap-1 transition-colors">
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                  <button onClick={() => setShowFilters(false)} className="p-1 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors">
+                    <X className="w-4 h-4" />
                   </button>
-                )}
+                </div>
               </div>
 
-              {/* Quick Filters Row - dynamically sized based on available filters */}
-              <div className={`grid grid-cols-1 gap-4 mb-5 ${
+              {/* Quick Filters Row */}
+              <div className={`grid grid-cols-1 gap-3 mb-3 ${
                 availableFilters.status && availableFilters.sort.length > 1 
                   ? 'md:grid-cols-3' 
                   : availableFilters.status || availableFilters.sort.length > 1 
                     ? 'md:grid-cols-2' 
                     : ''
               }`}>
-                {/* Content Rating - Always shown */}
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Shield className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Rating</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setContentRating('safe')}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        contentRating === 'safe' 
-                          ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Shield className="w-3.5 h-3.5" />
-                      Safe
-                    </button>
-                    <button
-                      onClick={() => setContentRating('all')}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        contentRating === 'all' 
-                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      All
-                    </button>
-                    <button
-                      onClick={() => setContentRating('adult')}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        contentRating === 'adult' 
-                          ? 'bg-red-500 text-white shadow-lg shadow-red-500/25' 
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                      }`}
-                    >
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      18+
-                    </button>
-                  </div>
-                </div>
-
-                {/* Status Filter - Only show when supported by selected sources */}
-                {availableFilters.status && (
-                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Clock className="w-4 h-4 text-blue-500" />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setStatusFilter('all')}
-                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                          statusFilter === 'all' 
-                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                        }`}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('ongoing')}
-                        className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                          statusFilter === 'ongoing' 
-                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                        }`}
-                      >
-                        <Loader2 className="w-3 h-3" />
-                        Ongoing
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('completed')}
-                        className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                          statusFilter === 'completed' 
-                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Completed
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Sort By - Only show when multiple sort options available */}
-                {availableFilters.sort.length > 1 && (
-                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                    <div className="flex items-center gap-2 mb-3">
-                      <ArrowUpDown className="w-4 h-4 text-purple-500" />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort By</span>
-                    </div>
-                    <div className="flex gap-2">
-                      {availableFilters.sort.includes('popular') && (
-                        <button
-                          onClick={() => setSortBy('popular')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                            sortBy === 'popular' 
-                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-                        >
-                          Popular
-                        </button>
-                      )}
-                      {availableFilters.sort.includes('latest') && (
-                        <button
-                          onClick={() => setSortBy('latest')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                            sortBy === 'latest' 
-                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-                        >
-                          Latest
-                        </button>
-                      )}
-                      {availableFilters.sort.includes('updated') && (
-                        <button
-                          onClick={() => setSortBy('updated')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                            sortBy === 'updated' 
-                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-                        >
-                          Updated
-                        </button>
-                      )}
-                      {availableFilters.sort.includes('rating') && (
-                        <button
-                          onClick={() => setSortBy('rating')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                            sortBy === 'rating' 
-                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' 
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-                        >
-                          Rating
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Content Type & Sources Row */}
-              <div className={`grid grid-cols-1 ${availableContentTypes.length > 1 ? 'md:grid-cols-2' : ''} gap-4 mb-5`}>
-                {/* Content Type Filter - Only show when multiple types available */}
-                {availableContentTypes.length > 1 && (
-                  <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Layers className="w-4 h-4 text-cyan-500" />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Content Type</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setContentType('all')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          contentType === 'all' 
-                            ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                        }`}
-                      >
-                        All
-                      </button>
-                      {availableContentTypes.map(type => {
-                        const icons = {
-                          manga: Book,
-                          manhwa: Book,
-                          manhua: Book,
-                          doujinshi: BookOpen,
-                          artistcg: Palette,
-                          gamecg: Gamepad2,
-                          imageset: ImageIcon,
-                          western: Globe,
-                          cosplay: Camera,
-                          oneshot: Book,
-                        };
-                        const Icon = icons[type.id] || Book;
-                        return (
-                          <button
-                            key={type.id}
-                            onClick={() => setContentType(type.id)}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                              contentType === type.id 
-                                ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                            }`}
-                          >
-                            <Icon className="w-3 h-3" />
-                            {type.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sources Filter */}
-                <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Database className="w-4 h-4 text-pink-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sources</span>
-                    {selectedSources.length > 0 && (
-                      <span className="text-xs text-pink-400">({selectedSources.length} selected)</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {sources.length > 0 ? (
-                      sources.map(source => (
-                        <button
-                          key={source.id}
-                          onClick={() => toggleSource(source.id)}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            selectedSources.includes(source.id)
-                              ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/25'
-                              : source.adult 
-                                ? 'bg-red-950/50 text-red-300/70 hover:text-red-200 hover:bg-red-900/50 border border-red-900/30'
-                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-                          title={source.adult ? '18+ Source' : 'Safe Source'}
-                        >
-                          {source.name}
-                        </button>
-                      ))
-                    ) : (
-                      <span className="text-xs text-zinc-500">Loading sources...</span>
-                    )}
-                  </div>
-                  {selectedSources.length > 0 && (
-                    <button
-                      onClick={() => setSelectedSources([])}
-                      className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                    >
-                      Clear source selection
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Active Filters Display */}
-              {(selectedTags.length > 0 || excludedTags.length > 0 || selectedSources.length > 0 || contentType !== 'all') && (
-                <div className="mb-4 p-3 bg-zinc-900/30 rounded-xl border border-zinc-800/50">
+                {/* Content Rating */}
+                <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-zinc-400">Active Filters:</span>
+                    <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Rating</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {/* Content Type Badge */}
-                    {contentType !== 'all' && (
-                      <span className="px-2.5 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg flex items-center gap-1.5 border border-cyan-500/30">
-                        <Layers className="w-3 h-3" />{contentType}
-                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => setContentType('all')} />
-                      </span>
-                    )}
-                    {/* Source Badges */}
-                    {selectedSources.map(sourceId => {
-                      const source = sources.find(s => s.id === sourceId);
-                      return (
-                        <span 
-                          key={sourceId} 
-                          className="px-2.5 py-1 text-xs bg-pink-500/20 text-pink-400 rounded-lg flex items-center gap-1.5 border border-pink-500/30"
-                        >
-                          <Database className="w-3 h-3" />{source?.name || sourceId}
-                          <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleSource(sourceId)} />
-                        </span>
-                      );
-                    })}
-                    {/* Tag Badges */}
-                    {selectedTags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="px-2.5 py-1 text-xs bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center gap-1.5 border border-emerald-500/30"
-                      >
-                        <span className="text-emerald-500 font-bold">+</span>{tag}
-                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleTag(tag, 'include')} />
-                      </span>
-                    ))}
-                    {excludedTags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="px-2.5 py-1 text-xs bg-red-500/20 text-red-400 rounded-lg flex items-center gap-1.5 border border-red-500/30"
-                      >
-                        <span className="text-red-500 font-bold">−</span>{tag}
-                        <X className="w-3 h-3 cursor-pointer hover:text-white transition-colors" onClick={() => toggleTag(tag, 'exclude')} />
-                      </span>
-                    ))}
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setContentRating('safe')}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                        contentRating === 'safe' ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                      <Shield className="w-3 h-3" />Safe
+                    </button>
+                    <button onClick={() => setContentRating('all')}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                        contentRating === 'all' ? 'bg-amber-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                      <Eye className="w-3 h-3" />All
+                    </button>
+                    <button onClick={() => setContentRating('adult')}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                        contentRating === 'adult' ? 'bg-red-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                      <ShieldAlert className="w-3 h-3" />18+
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Tags Section - Only show when tags are supported */}
-              {availableFilters.tags && allTags.length > 0 && (
-                <div className="bg-zinc-900/30 rounded-xl border border-zinc-800/50 overflow-hidden">
-                  <button
-                    onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-orange-500/20 flex items-center justify-center">
-                        <Filter className="w-3 h-3 text-orange-500" />
-                      </div>
-                      <span className="text-sm font-medium">Genre & Tags</span>
-                      <span className="text-xs text-zinc-500 hidden sm:inline">
-                        {tagsLoading ? '(Loading...)' : `(${allTags.length} tags)`}
-                      </span>
+                {/* Status Filter */}
+                {availableFilters.status && (
+                  <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Status</span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
-                  </button>
-                  
-                  {expandedSection === 'tags' && (
-                    <div className="px-4 pb-4 border-t border-zinc-800/50">
-                      {/* Search bar for tags (shown when > 50 tags) */}
-                      {needsTagSearch && (
-                        <div className="pt-3 pb-2">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                            <input
-                              type="text"
-                              value={tagSearch}
-                              onChange={(e) => setTagSearch(e.target.value)}
-                              placeholder="Search tags..."
-                              className="w-full h-9 pl-9 pr-8 bg-zinc-800 border border-zinc-700 rounded-lg text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20"
-                            />
-                            {tagSearch && (
-                              <button
-                                onClick={() => setTagSearch('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-zinc-700 rounded"
-                              >
-                                <X className="w-3 h-3 text-zinc-400" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="mt-2 text-xs text-zinc-500">
-                            {tagSearch ? `${filteredTags.length} of ${allTags.length} tags` : 'Click to include, right-click to exclude'}
-                          </div>
-                        </div>
-                      )}
+                    <div className="flex gap-1.5">
+                      <button onClick={() => setStatusFilter('all')}
+                        className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                          statusFilter === 'all' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                        All
+                      </button>
+                      <button onClick={() => setStatusFilter('ongoing')}
+                        className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                          statusFilter === 'ongoing' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                        <Loader2 className="w-3 h-3" />Ongoing
+                      </button>
+                      <button onClick={() => setStatusFilter('completed')}
+                        className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                          statusFilter === 'completed' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                        <CheckCircle2 className="w-3 h-3" />Done
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                      {/* Selected tags always shown at top */}
+                {/* Sort By */}
+                {availableFilters.sort.length > 1 && (
+                  <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-purple-500" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Sort</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {['popular', 'latest', 'updated', 'rating'].filter(s => availableFilters.sort.includes(s)).map(s => (
+                        <button key={s} onClick={() => setSortBy(s)}
+                          className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium capitalize transition-all ${
+                            sortBy === s ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Content Type & Sources - Inline */}
+              <div className="flex flex-wrap items-start gap-3 mb-3">
+                {/* Content Type */}
+                {availableContentTypes.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-zinc-500">Type:</span>
+                    <div className="flex flex-wrap gap-1">
+                      <button onClick={() => setContentType('all')}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${contentType === 'all' ? 'bg-cyan-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>All</button>
+                      {availableContentTypes.map(type => (
+                        <button key={type.id} onClick={() => setContentType(type.id)}
+                          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${contentType === type.id ? 'bg-cyan-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                          {type.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Sources */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-zinc-500">Source:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {sources.length > 0 ? sources.map(source => (
+                      <button key={source.id} onClick={() => toggleSource(source.id)}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${selectedSources.includes(source.id) ? 'bg-pink-500 text-white' : source.adult ? 'bg-red-950/50 text-red-300/70 hover:bg-red-900/50' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                        {source.name}
+                      </button>
+                    )) : <span className="text-[11px] text-zinc-500">Loading...</span>}
+                    {selectedSources.length > 0 && (
+                      <button onClick={() => setSelectedSources([])} className="text-[11px] text-zinc-500 hover:text-zinc-300 ml-1">✕</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tags Section - Compact collapsible */}
+              {availableFilters.tags && allTags.length > 0 && (
+                <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50">
+                  <button onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-zinc-800/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Filter className="w-3.5 h-3.5 text-orange-500" />
+                      <span className="text-xs font-medium">Tags</span>
+                      <span className="text-[11px] text-zinc-500">{tagsLoading ? 'Loading...' : `(${allTags.length})`}</span>
                       {(selectedTags.length > 0 || excludedTags.length > 0) && (
-                        <div className="pt-2 pb-3 border-b border-zinc-800/50 mb-3">
-                          <div className="text-xs text-zinc-500 mb-2">Selected filters:</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedTags.map(tag => (
-                              <button
-                                key={`selected-${tag}`}
-                                onClick={() => toggleTag(tag, 'include')}
-                                className="px-2.5 py-1.5 text-xs rounded-lg font-medium bg-emerald-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-1"
-                              >
-                                <span className="font-bold">+</span>{tag}
-                                <X className="w-3 h-3 ml-1" />
-                              </button>
-                            ))}
-                            {excludedTags.map(tag => (
-                              <button
-                                key={`excluded-${tag}`}
-                                onClick={() => toggleTag(tag, 'exclude')}
-                                className="px-2.5 py-1.5 text-xs rounded-lg font-medium bg-red-500 text-white shadow-md shadow-red-500/25 flex items-center gap-1"
-                              >
-                                <span className="font-bold">−</span>{tag}
-                                <X className="w-3 h-3 ml-1" />
-                              </button>
-                            ))}
+                        <span className="text-[11px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">{selectedTags.length + excludedTags.length} selected</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSection === 'tags' && (
+                    <div className="px-3 pb-3 border-t border-zinc-800/50">
+                      {needsTagSearch && (
+                        <div className="pt-2 pb-1">
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                            <input type="text" value={tagSearch} onChange={(e) => setTagSearch(e.target.value)} placeholder="Search tags..."
+                              className="w-full h-7 pl-7 pr-6 bg-zinc-800 border border-zinc-700 rounded-md text-xs placeholder-zinc-500 focus:outline-none focus:border-orange-500/50" />
+                            {tagSearch && <button onClick={() => setTagSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2"><X className="w-3 h-3 text-zinc-400" /></button>}
                           </div>
                         </div>
                       )}
-
-                      {/* Loading state */}
-                      {tagsLoading ? (
-                        <div className="py-8 flex items-center justify-center">
-                          <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
-                          <span className="ml-2 text-sm text-zinc-500">Loading tags...</span>
+                      {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                        <div className="flex flex-wrap gap-1 pt-2 pb-2 border-b border-zinc-800/50 mb-2">
+                          {selectedTags.map(tag => (
+                            <button key={`s-${tag}`} onClick={() => toggleTag(tag, 'include')} className="px-2 py-1 text-[11px] rounded-md bg-emerald-500 text-white flex items-center gap-1">
+                              +{tag}<X className="w-2.5 h-2.5" />
+                            </button>
+                          ))}
+                          {excludedTags.map(tag => (
+                            <button key={`e-${tag}`} onClick={() => toggleTag(tag, 'exclude')} className="px-2 py-1 text-[11px] rounded-md bg-red-500 text-white flex items-center gap-1">
+                              −{tag}<X className="w-2.5 h-2.5" />
+                            </button>
+                          ))}
                         </div>
+                      )}
+                      {tagsLoading ? (
+                        <div className="py-4 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-orange-500" /></div>
                       ) : (
-                        <>
-                          {/* Tags list - scrollable if many tags */}
-                          <div className={`pt-2 ${needsTagSearch ? 'max-h-64 overflow-y-auto scrollbar-thin' : ''}`}>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(needsTagSearch ? filteredTags : allTags).map(tag => (
-                                <button
-                                  key={tag}
-                                  onClick={() => toggleTag(tag, 'include')}
-                                  onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                                  className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                                    selectedTags.includes(tag) 
-                                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25' 
-                                      : excludedTags.includes(tag) 
-                                        ? 'bg-red-500 text-white shadow-md shadow-red-500/25' 
-                                        : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                                  }`}
-                                >
-                                  {tag}
-                                </button>
-                              ))}
-                            </div>
-                            {needsTagSearch && filteredTags.length === 0 && tagSearch && (
-                              <div className="py-4 text-center text-sm text-zinc-500">
-                                No tags matching "{tagSearch}"
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Source breakdown (if multiple sources selected) */}
-                          {Object.keys(tagsBySource).length > 1 && !tagSearch && (
-                            <div className="mt-4 pt-3 border-t border-zinc-800/50">
-                              <div className="text-xs text-zinc-500 mb-2">Tags by source:</div>
-                              <div className="flex flex-wrap gap-2">
-                                {Object.entries(tagsBySource).map(([sourceId, sourceTags]) => {
-                                  const source = sources.find(s => s.id === sourceId);
-                                  return (
-                                    <span key={sourceId} className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
-                                      {source?.name || sourceId}: {sourceTags.length}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </>
+                        <div className="flex flex-wrap gap-1 pt-2 max-h-40 overflow-y-auto">
+                          {(needsTagSearch ? filteredTags : allTags).map(tag => (
+                            <button key={tag} onClick={() => toggleTag(tag, 'include')} onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
+                              className={`px-2 py-1 text-[11px] rounded-md font-medium transition-all ${selectedTags.includes(tag) ? 'bg-emerald-500 text-white' : excludedTags.includes(tag) ? 'bg-red-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                              {tag}
+                            </button>
+                          ))}
+                          {needsTagSearch && filteredTags.length === 0 && tagSearch && <div className="py-2 text-xs text-zinc-500">No match</div>}
+                        </div>
                       )}
                     </div>
                   )}
@@ -1223,32 +958,10 @@ export default function HomePage() {
               )}
 
               {/* Action Bar */}
-              <div className="mt-5 pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-4">
-                <div className="text-xs text-zinc-500">
-                  {hasFilters ? (
-                    <span>{selectedTags.length + excludedTags.length} filter(s) active</span>
-                  ) : (
-                    <span>No filters applied</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      clearFilters();
-                      setShowFilters(false);
-                    }}
-                    className="px-4 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => setShowFilters(false)}
-                    className="px-5 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition-colors shadow-lg shadow-orange-500/25 flex items-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Apply Filters
-                  </button>
-                </div>
+              <div className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center justify-end gap-2">
+                <button onClick={() => setShowFilters(false)} className="px-4 py-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-md font-medium transition-colors">
+                  Apply
+                </button>
               </div>
             </div>
           </div>
