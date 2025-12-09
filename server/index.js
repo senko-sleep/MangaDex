@@ -7,7 +7,7 @@ import scrapers from './scrapers/index.js';
 const app = express();
 const PORT = process.env.PORT || 3002;
 
-// Simple logger with timestamps and colors
+// Simple logger with timestamps and colors (defined early for use in startup cache)
 const log = {
   info: (msg, data = {}) => console.log(`\x1b[36m[INFO]\x1b[0m ${new Date().toISOString()} ${msg}`, Object.keys(data).length ? data : ''),
   warn: (msg, data = {}) => console.log(`\x1b[33m[WARN]\x1b[0m ${new Date().toISOString()} ${msg}`, Object.keys(data).length ? data : ''),
@@ -18,6 +18,58 @@ const log = {
     console.log(`${color}[API]\x1b[0m ${new Date().toISOString()} ${method} ${path} ${status} ${duration}ms`, Object.keys(extra).length ? extra : '');
   },
 };
+
+// ============ STARTUP CACHE FOR INSTANT LOAD ============
+// Cache popular manga on startup so first request is instant
+const startupCache = {
+  popular: { sfw: null, adult: null },
+  latest: { sfw: null, adult: null },
+  lastRefresh: 0,
+  isRefreshing: false,
+  REFRESH_INTERVAL: 5 * 60 * 1000, // Refresh every 5 minutes
+};
+
+// Prime the cache in background
+async function primeCache() {
+  if (startupCache.isRefreshing) return;
+  startupCache.isRefreshing = true;
+  
+  log.info('🔄 Priming startup cache...');
+  const start = Date.now();
+  
+  try {
+    // Fetch popular manga for both SFW and adult modes in parallel
+    const [sfwPopular, adultPopular] = await Promise.all([
+      scrapers.getPopular({ includeAdult: false, page: 1 }).catch(() => []),
+      scrapers.getPopular({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
+    ]);
+    
+    startupCache.popular.sfw = sfwPopular;
+    startupCache.popular.adult = adultPopular;
+    startupCache.lastRefresh = Date.now();
+    
+    log.info(`✅ Startup cache primed in ${Date.now() - start}ms`, {
+      sfw: sfwPopular.length,
+      adult: adultPopular.length,
+    });
+  } catch (e) {
+    log.error('Cache prime failed', { error: e.message });
+  } finally {
+    startupCache.isRefreshing = false;
+  }
+}
+
+// Get cached data or trigger refresh
+function getCachedPopular(includeAdult) {
+  const cache = includeAdult ? startupCache.popular.adult : startupCache.popular.sfw;
+  
+  // Trigger background refresh if stale
+  if (Date.now() - startupCache.lastRefresh > startupCache.REFRESH_INTERVAL) {
+    primeCache(); // Non-blocking
+  }
+  
+  return cache;
+}
 
 // In-memory cache for proxied images
 const imageCache = new Map();
@@ -235,9 +287,25 @@ app.get('/api/manga/search', async (req, res) => {
 
     log.debug('Search request', { query: q, sources: sourceIds, adult, status, sort, page });
 
-    let data = q 
-      ? await scrapers.search(q, options)
-      : await scrapers.getPopular(options);
+    let data;
+    
+    // For initial page load (no query, no filters, page 1), use startup cache for instant response
+    const isInitialLoad = !q && !sourceIds && !tags && !exclude && page === '1' && sort === 'popular';
+    
+    if (isInitialLoad) {
+      const cached = getCachedPopular(includeAdult);
+      if (cached && cached.length > 0) {
+        data = cached;
+        log.info('⚡ Instant response from startup cache', { results: data.length, duration: Date.now() - startTime });
+      }
+    }
+    
+    // If no cache hit, fetch from sources
+    if (!data) {
+      data = q 
+        ? await scrapers.search(q, options)
+        : await scrapers.getPopular(options);
+    }
 
     // Filter by status if specified
     if (status && status !== 'all') {
@@ -457,4 +525,10 @@ app.get('/api/og/:mangaId(*)', async (req, res) => {
 app.listen(PORT, () => {
   log.info(`API server started`, { port: PORT, url: `http://localhost:${PORT}` });
   log.info('Available sources:', Object.keys(scrapers.sources || {}).join(', '));
+  
+  // Prime cache immediately on startup for instant first load
+  primeCache();
+  
+  // Periodically refresh cache to keep it warm
+  setInterval(primeCache, startupCache.REFRESH_INTERVAL);
 });

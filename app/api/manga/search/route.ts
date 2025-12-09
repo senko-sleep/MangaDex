@@ -109,9 +109,9 @@ export async function GET(request: NextRequest) {
       try {
         let results: any[] = [];
         
-        // Build search options
+        // Build search options - give each source enough results
         const searchOptions: any = { 
-          limit: Math.ceil(limit / Math.min(targetSources.length, 3)),
+          limit: limit, // Don't divide - let each source return full results
           page,
           language: language || undefined
         };
@@ -122,15 +122,16 @@ export async function GET(request: NextRequest) {
           searchOptions.category = contentType;
         }
         
-        // Perform search or browse
+        // Perform search or browse based on sort preference
         if (query) {
+          // Search with query
           results = await source.search(query, searchOptions);
-        } else if (sort === 'popular') {
-          results = await (source.getPopular?.(searchOptions) || source.search?.('', searchOptions) || []);
         } else if (sort === 'latest') {
-          results = await (source.getLatest?.(searchOptions) || source.getPopular?.(searchOptions) || []);
+          // Latest/newest first
+          results = await (source.getLatest?.(searchOptions) || source.search?.('', searchOptions) || []);
         } else {
-          results = await (source.getPopular?.(searchOptions) || []);
+          // Default to popular
+          results = await (source.getPopular?.(searchOptions) || source.search?.('', searchOptions) || []);
         }
         
         // Add source ID to each result
@@ -140,6 +141,7 @@ export async function GET(request: NextRequest) {
           isAdult: ADULT_SOURCES.includes(sourceName)
         }));
         
+        log.info(`[${sourceName}] returned ${results.length} results`);
         return { source: sourceName, results };
       } catch (error) {
         log.warn(`Search failed for ${sourceName}`, { error: (error as Error).message });
@@ -147,14 +149,14 @@ export async function GET(request: NextRequest) {
       }
     });
     
-    // Wait for all searches with timeout
+    // Wait for all searches with longer timeout for slow sources
     const searchResults = await Promise.race([
       Promise.allSettled(searchPromises),
-      new Promise<any[]>(resolve => setTimeout(() => resolve([]), 10000))
+      new Promise<any[]>(resolve => setTimeout(() => resolve([]), 15000))
     ]);
     
-    // Aggregate results
-    const seenTitles = new Set<string>();
+    // Aggregate results - use ID-based deduplication instead of title
+    const seenIds = new Set<string>();
     
     for (const result of searchResults) {
       if (result.status === 'fulfilled' && result.value) {
@@ -162,10 +164,10 @@ export async function GET(request: NextRequest) {
         sourceResults[source] = results;
         
         for (const manga of results) {
-          // Deduplicate by normalized title
-          const normalizedTitle = (manga.title || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
-          if (normalizedTitle && !seenTitles.has(normalizedTitle)) {
-            seenTitles.add(normalizedTitle);
+          // Deduplicate by full ID (includes source prefix like imhentai:12345)
+          const mangaId = manga.id || '';
+          if (mangaId && !seenIds.has(mangaId)) {
+            seenIds.add(mangaId);
             allResults.push(manga);
           }
         }

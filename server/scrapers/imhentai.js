@@ -16,8 +16,28 @@ export class IMHentaiScraper extends BaseScraper {
     return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async search(query, options = {}) {
     try {
+      // Handle both old positional params and new options object
+      let page = 1;
+      let tags = [];
+      let excludeTags = [];
+      let language = null;
+      
+      if (typeof options === 'number') {
+        // Old style: search(query, page, includeAdult, tags, excludeTags, language)
+        page = options || 1;
+        tags = arguments[3] || [];
+        excludeTags = arguments[4] || [];
+        language = arguments[5] || null;
+      } else {
+        // New style: search(query, { page, limit, language, type, category, tags, exclude })
+        page = options.page || 1;
+        tags = options.tags || [];
+        excludeTags = options.exclude || [];
+        language = options.language || null;
+      }
+      
       // Build search query - IMHentai supports tag search in query
       let searchQuery = query || '';
       
@@ -35,10 +55,11 @@ export class IMHentaiScraper extends BaseScraper {
       
       // If no query at all, return popular instead
       if (!searchQuery) {
-        return this.getPopular(page, includeAdult, tags, excludeTags, language);
+        return this.getPopular(options);
       }
       
       const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
+      console.log('[IMHentai] Searching:', searchUrl);
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
       return this.parseGalleryList($);
@@ -48,14 +69,36 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async getPopular(options = {}) {
     try {
-      // If tags or language provided, use search
-      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
-        return this.search('', page, includeAdult, tags, excludeTags, language);
+      // Handle both old positional params and new options object
+      let page = 1;
+      let tags = [];
+      let excludeTags = [];
+      let language = null;
+      
+      if (typeof options === 'number') {
+        // Old style: getPopular(page, includeAdult, tags, excludeTags, language)
+        page = options || 1;
+        tags = arguments[2] || [];
+        excludeTags = arguments[3] || [];
+        language = arguments[4] || null;
+      } else {
+        // New style: getPopular({ page, limit, language, tags, exclude })
+        page = options.page || 1;
+        tags = options.tags || [];
+        excludeTags = options.exclude || [];
+        language = options.language || null;
       }
       
-      const $ = await this.fetch(`${this.baseUrl}/popular/?page=${page}`);
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', options);
+      }
+      
+      const popularUrl = `${this.baseUrl}/popular/?page=${page}`;
+      console.log('[IMHentai] Fetching popular:', popularUrl);
+      const $ = await this.fetch(popularUrl);
       if (!$) return [];
       return this.parseGalleryList($);
     } catch (e) {
@@ -64,14 +107,36 @@ export class IMHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async getLatest(options = {}) {
     try {
-      // If tags or language provided, use search
-      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
-        return this.search('', page, includeAdult, tags, excludeTags, language);
+      // Handle both old positional params and new options object
+      let page = 1;
+      let tags = [];
+      let excludeTags = [];
+      let language = null;
+      
+      if (typeof options === 'number') {
+        // Old style: getLatest(page, includeAdult, tags, excludeTags, language)
+        page = options || 1;
+        tags = arguments[2] || [];
+        excludeTags = arguments[3] || [];
+        language = arguments[4] || null;
+      } else {
+        // New style: getLatest({ page, limit, language, tags, exclude })
+        page = options.page || 1;
+        tags = options.tags || [];
+        excludeTags = options.exclude || [];
+        language = options.language || null;
       }
       
-      const $ = await this.fetch(`${this.baseUrl}/?page=${page}`);
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        return this.search('', options);
+      }
+      
+      const latestUrl = `${this.baseUrl}/?page=${page}`;
+      console.log('[IMHentai] Fetching latest:', latestUrl);
+      const $ = await this.fetch(latestUrl);
       if (!$) return [];
       return this.parseGalleryList($);
     } catch (e) {
@@ -96,11 +161,20 @@ export class IMHentaiScraper extends BaseScraper {
       
       const gid = match[1];
       
-      // Get title from gallery_title h2 > a or img alt
-      const title = $el.find('.gallery_title a').text().trim() || 
-                    $el.find('img').attr('alt') ||
-                    link.attr('title') || 
-                    `Gallery ${gid}`;
+      // Get title from caption div or h2, or from link title attribute
+      let title = $el.find('.caption, .gallery_title').text().trim();
+      if (!title) {
+        title = $el.find('h2').text().trim();
+      }
+      if (!title) {
+        title = link.attr('title') || '';
+      }
+      if (!title) {
+        title = $el.find('img').attr('alt') || '';
+      }
+      if (!title || title === 'IMG') {
+        title = `Gallery ${gid}`;
+      }
       
       // Get cover from lazy-loaded img
       let cover = $el.find('img.lazy').attr('data-src') || 
@@ -111,8 +185,8 @@ export class IMHentaiScraper extends BaseScraper {
         cover = `https://imhentai.xxx${cover}`;
       }
       
-      // Get category from thumb_cat
-      const category = $el.find('.thumb_cat').text().trim().toLowerCase() || 'doujinshi';
+      // Get category from thumb_cat span
+      const category = $el.find('.thumb_cat, .category').text().trim().toLowerCase() || 'doujinshi';
       
       if (gid) {
         results.push({
@@ -128,6 +202,7 @@ export class IMHentaiScraper extends BaseScraper {
       }
     });
 
+    console.log(`[IMHentai] Parsed ${results.length} galleries`);
     return results;
   }
 

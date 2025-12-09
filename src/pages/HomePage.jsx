@@ -483,11 +483,57 @@ export default function HomePage() {
       return;
     }
     
-    console.log('[MangaFox] Filters changed, fetching...');
+    console.log('[MangaFox] Filters changed - sort:', sortBy, 'type:', contentType, 'rating:', contentRating);
+    
+    // Reset state and fetch with new filters
     setManga([]);
     setPage(1);
     setHasMore(true);
-    fetchManga(true);
+    setLoading(false); // Reset loading state to allow fetch
+    
+    // Fetch with fresh URL immediately
+    const doFetch = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (search) params.set('q', search);
+        params.set('page', '1');
+        
+        if (contentRating === 'safe') params.set('adult', 'false');
+        else if (contentRating === 'adult') params.set('adult', 'only');
+        else params.set('adult', 'true');
+        
+        if (contentType && contentType !== 'all') params.set('type', contentType);
+        if (selectedSources.length > 0) params.set('sources', selectedSources.join(','));
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (sortBy) params.set('sort', sortBy);
+        if (selectedTags.length) params.set('tags', selectedTags.join(','));
+        if (excludedTags.length) params.set('exclude', excludedTags.join(','));
+        
+        const url = apiUrl(`/api/manga/search?${params}`);
+        console.log('[MangaFox] Fetching:', url);
+        
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        let data = json.data || [];
+        
+        if (contentRating === 'adult') {
+          data = data.filter(m => m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic');
+        }
+        
+        setManga(data);
+        setPage(2);
+        setHasMore(data.length >= 20);
+        setInitialLoad(false);
+      } catch (e) {
+        console.error('[MangaFox] Fetch error:', e);
+        setInitialLoad(false);
+      }
+      setLoading(false);
+    };
+    
+    doFetch();
   }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
   // Infinite scroll - trigger early with larger rootMargin for smoother loading
