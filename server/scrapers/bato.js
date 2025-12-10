@@ -216,13 +216,34 @@ export class BatoScraper extends BaseScraper {
       const title = $('h3.item-title a, h3 a, .detail-info h1, .item-title').first().text().trim() ||
                     $('title').text().replace(' - Bato.To', '').trim();
       
-      // Get cover
-      let cover = $('img.shadow-6, .detail-img img, .cover img').first().attr('src') ||
-                  $('img[src*="cover"]').first().attr('src') || '';
+      // Get cover - try multiple selectors for Bato's page structure
+      let cover = '';
+      
+      // Try common Bato cover image selectors
+      const coverSelectors = [
+        'img.shadow-6',
+        '.detail-set img',
+        'div[data-hk] img',
+        '.item-cover img',
+        'img[src*="/ampi/"]',
+        'img[src*="/thumb/"]', 
+        'img[src*="cover"]',
+      ];
+      
+      for (const selector of coverSelectors) {
+        const img = $(selector).first();
+        const src = img.attr('src') || img.attr('data-src') || '';
+        if (src && (src.includes('http') || src.startsWith('/'))) {
+          cover = src;
+          break;
+        }
+      }
       
       if (cover && cover.startsWith('/')) {
         cover = `${this.baseUrl}${cover}`;
       }
+      
+      console.log('[Bato] Cover found:', cover ? cover.substring(0, 80) + '...' : 'none');
       
       // Get description
       const description = $('div.limit-html, .detail-info .summary, .description').first().text().trim() ||
