@@ -268,6 +268,9 @@ export default function HomePage() {
     fetchSections();
   }, []);
 
+  // Track if we're restoring state - don't clear sources or re-fetch while restoring
+  const isRestoringState = useRef(shouldSkipFetch);
+
   // Load sources based on content rating
   // safe → SFW only, all → all sources, adult → NSFW only
   useEffect(() => {
@@ -289,8 +292,11 @@ export default function HomePage() {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
       setContentTypes(d.contentTypes || []);
-      // Clear selected sources when switching modes to avoid selecting unavailable sources
-      setSelectedSources([]);
+      
+      // Only clear selected sources if NOT restoring from saved state
+      if (!isRestoringState.current) {
+        setSelectedSources([]);
+      }
     }).catch(() => {});
   }, [contentRating]);
 
@@ -459,33 +465,21 @@ export default function HomePage() {
     prefetchCache.current.clear();
   }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
-  // Track if this is the initial mount to prevent double-fetch
-  const isInitialMount = useRef(true);
-  const didSkipInitialFetch = useRef(false);
+  // Track skips remaining when restoring (need to skip multiple effect runs)
+  const restoreSkipsRemaining = useRef(shouldSkipFetch ? 3 : 0);
   
   // Reset and fetch when filters change (skip if restoring from saved state)
   useEffect(() => {
-    // Skip the first fetch if we're restoring from saved state with manga loaded
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      
-      // If we determined at mount time that we should skip fetch, do so
-      if (shouldSkipFetch) {
-        didSkipInitialFetch.current = true;
-        console.log('[MangaFox] Restoring from saved state, skipping initial fetch. Manga count:', savedState?.manga?.length);
-        return;
-      }
-    }
-    
-    // If we skipped initial fetch and this is a subsequent render with same filters, skip
-    if (didSkipInitialFetch.current) {
-      didSkipInitialFetch.current = false;
+    // Skip multiple cycles while restoring from saved state
+    // This prevents re-fetch when sources effect, tags effect, etc. trigger changes
+    if (restoreSkipsRemaining.current > 0) {
+      restoreSkipsRemaining.current--;
+      console.log('[MangaFox] Restoring state - skipping fetch. Skips remaining:', restoreSkipsRemaining.current, 'Manga count:', manga.length);
       return;
     }
     
-    console.log('[MangaFox] Filters changed - sort:', sortBy, 'type:', contentType, 'rating:', contentRating);
+    console.log('[MangaFox] Filters changed - sort:', sortBy, 'type:', contentType, 'rating:', contentRating, 'sources:', selectedSources);
     
-    // Reset state and fetch with new filters
     setManga([]);
     setPage(1);
     setHasMore(true);

@@ -5,6 +5,7 @@ import NHentaiScraper from './nhentai.js';
 import { EHentaiScraper } from './ehentai.js';
 import { IMHentaiScraper } from './imhentai.js';
 import { HitomiScraper } from './hitomi.js';
+import { BatoScraper } from './bato.js';
 
 // Fast cache - 5 min for results, check every 60s for cleanup
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
@@ -50,6 +51,7 @@ const scrapers = {
   ehentai: new EHentaiScraper(),
   imhentai: new IMHentaiScraper(),
   hitomi: new HitomiScraper(),
+  bato: new BatoScraper(),
 };
 
 // Source metadata with content types and supported filters
@@ -147,6 +149,22 @@ export const sources = {
       language: true,
       languages: ['all', 'english', 'japanese', 'chinese', 'korean'],
       sort: ['popular', 'latest'],
+    },
+  },
+  bato: {
+    id: 'bato',
+    name: 'Bato.to',
+    icon: '📖',
+    isAdult: false,
+    enabled: true,
+    description: 'Large manga library with multiple languages',
+    contentTypes: ['manga', 'manhwa', 'manhua', 'webtoon'],
+    filters: {
+      tags: true,
+      status: true,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'korean', 'chinese'],
+      sort: ['popular', 'latest', 'updated', 'rating'],
     },
   },
 };

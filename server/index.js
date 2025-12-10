@@ -93,17 +93,59 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Get appropriate referer for image URL
+// Auto-detect source from URL and return appropriate referer
 function getRefererForUrl(url) {
+  if (!url) return 'https://mangadex.org/';
   try {
-    const hostname = new URL(url).hostname;
-    if (hostname.includes('nhentai') || hostname.includes('nhentaimg')) return 'https://nhentai.xxx/';
-    if (hostname.includes('e-hentai') || hostname.includes('hath.network')) return 'https://e-hentai.org/';
-    if (hostname.includes('imhentai')) return 'https://imhentai.xxx/';
-    if (hostname.includes('hitomi')) return 'https://hitomi.la/';
-    if (hostname.includes('mangadex')) return 'https://mangadex.org/';
-    if (hostname.includes('mangakakalot') || hostname.includes('manganato')) return 'https://manganato.com/';
-    if (hostname.includes('mangasee')) return 'https://mangasee123.com/';
+    const hostname = new URL(url).hostname.toLowerCase();
+    const urlLower = url.toLowerCase();
+    
+    // NHentai
+    if (hostname.includes('nhentai') || hostname.includes('nhentaimg')) {
+      return 'https://nhentai.xxx/';
+    }
+    // E-Hentai
+    if (hostname.includes('e-hentai') || hostname.includes('hath.network') || hostname.includes('exhentai')) {
+      return 'https://e-hentai.org/';
+    }
+    // IMHentai  
+    if (hostname.includes('imhentai')) {
+      return 'https://imhentai.xxx/';
+    }
+    // Hitomi
+    if (hostname.includes('hitomi')) {
+      return 'https://hitomi.la/';
+    }
+    // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, or /media/ path)
+    if (hostname.match(/^[ns]\d+\.[a-z]+\.org$/) ||
+        hostname.match(/^xfs-[ns]\d+\.[a-z]+\.org$/) ||
+        hostname.includes('mbimg') || hostname.includes('mbuul') || 
+        hostname.includes('mbznp') || hostname.includes('mbcej') ||
+        hostname.includes('mbeaj') || hostname.includes('mbwnp') ||
+        hostname.includes('meo.org') || hostname.includes('bato') ||
+        urlLower.includes('/media/mb')) {
+      return 'https://bato.to/';
+    }
+    // MangaDex
+    if (hostname.includes('mangadex') || hostname.includes('uploads.mangadex')) {
+      return 'https://mangadex.org/';
+    }
+    // MangaKakalot / MangaNato
+    if (hostname.includes('mangakakalot') || hostname.includes('manganato') || hostname.includes('chapmanganato')) {
+      return 'https://manganato.com/';
+    }
+    // MangaSee
+    if (hostname.includes('mangasee')) {
+      return 'https://mangasee123.com/';
+    }
+    // ComicK
+    if (hostname.includes('comick') || hostname.includes('meo.comick')) {
+      return 'https://comick.io/';
+    }
+    // MangaPark
+    if (hostname.includes('mangapark')) {
+      return 'https://mangapark.net/';
+    }
     // Default: use the origin of the image URL itself
     return new URL(url).origin + '/';
   } catch {
@@ -111,8 +153,98 @@ function getRefererForUrl(url) {
   }
 }
 
+// Helper to set CORS headers for image proxy
+function setImageCorsHeaders(res) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Cross-Origin-Embedder-Policy', 'unsafe-none');
+}
+
+// Handle OPTIONS preflight for image proxy
+app.options('/api/proxy/image', (req, res) => {
+  setImageCorsHeaders(res);
+  res.status(204).end();
+});
+
+// Fetch image with retry and different header sets
+async function fetchImageWithRetry(imageUrl, maxRetries = 3) {
+  const referer = getRefererForUrl(imageUrl);
+  
+  // Different header configurations to try
+  const headerConfigs = [
+    // Config 1: Full browser-like headers
+    {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Referer': referer,
+      'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      'Sec-Fetch-Dest': 'image',
+      'Sec-Fetch-Mode': 'no-cors',
+      'Sec-Fetch-Site': 'cross-site',
+      'Connection': 'keep-alive',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    },
+    // Config 2: Minimal headers (some CDNs block on too many headers)
+    {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Referer': referer,
+    },
+    // Config 3: Mobile user agent
+    {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Referer': referer,
+    },
+  ];
+  
+  let lastError = null;
+  let lastResponse = null;
+  
+  for (let i = 0; i < headerConfigs.length; i++) {
+    try {
+      const response = await fetch(imageUrl, { 
+        headers: headerConfigs[i],
+        redirect: 'follow',
+      });
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      lastResponse = response;
+      
+      // If 503, try next config
+      if (response.status === 503 || response.status === 403) {
+        continue;
+      }
+      
+      // For other errors, return immediately
+      return response;
+    } catch (e) {
+      lastError = e;
+      // Network error, try next config
+      continue;
+    }
+  }
+  
+  // All configs failed, return last response or throw error
+  if (lastResponse) return lastResponse;
+  throw lastError || new Error('All fetch attempts failed');
+}
+
 // Image proxy endpoint - bypasses hotlink protection
 app.get('/api/proxy/image', async (req, res) => {
+  // Set CORS headers first thing
+  setImageCorsHeaders(res);
+  
   const imageUrl = req.query.url;
   
   if (!imageUrl) {
@@ -120,37 +252,21 @@ app.get('/api/proxy/image', async (req, res) => {
     return res.status(400).send('Missing url parameter');
   }
 
-  // Set CORS headers explicitly for image responses
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-
   try {
     // Check cache first
     const cached = imageCache.get(imageUrl);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       res.set('Content-Type', cached.contentType);
-      res.set('Cache-Control', 'public, max-age=86400'); // Browser cache 24h
+      res.set('Cache-Control', 'public, max-age=86400');
       res.set('X-Cache', 'HIT');
       return res.send(cached.data);
     }
 
-    // Get the appropriate referer for this image source
-    const referer = getRefererForUrl(imageUrl);
-
-    // Fetch with proper headers to bypass hotlink protection
-    const fetchHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': referer,
-      'Origin': referer.replace(/\/$/, ''),
-      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
-    
-    let response = await fetch(imageUrl, { headers: fetchHeaders });
+    let response = await fetchImageWithRetry(imageUrl);
     let finalUrl = imageUrl;
 
-    // If 404, try alternative extensions (for IMHentai which uses .webp or .jpg)
-    if (response.status === 404 && imageUrl.includes('imhentai')) {
+    // If failed, try alternative extensions
+    if (!response.ok) {
       const extensions = ['.webp', '.jpg', '.png', '.gif'];
       const currentExt = imageUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)?.[0] || '';
       
@@ -158,19 +274,21 @@ app.get('/api/proxy/image', async (req, res) => {
         if (ext === currentExt.toLowerCase()) continue;
         
         const altUrl = imageUrl.replace(/\.(jpg|jpeg|png|gif|webp)$/i, ext);
-        const altResponse = await fetch(altUrl, { headers: fetchHeaders });
-        
-        if (altResponse.ok) {
-          response = altResponse;
-          finalUrl = altUrl;
-          log.info('Image proxy fallback succeeded', { original: imageUrl.substring(0, 80), fallback: ext });
-          break;
+        try {
+          const altResponse = await fetchImageWithRetry(altUrl);
+          if (altResponse.ok) {
+            response = altResponse;
+            finalUrl = altUrl;
+            log.info('Image extension fallback succeeded', { original: imageUrl.substring(0, 60), fallback: ext });
+            break;
+          }
+        } catch (e) {
+          // Continue trying
         }
       }
     }
 
     if (!response.ok) {
-      // Extract source from URL for better debugging
       const source = new URL(imageUrl).hostname.split('.').slice(-2, -1)[0] || 'unknown';
       log.error('Image proxy fetch failed', { 
         status: response.status, 
@@ -185,7 +303,6 @@ app.get('/api/proxy/image', async (req, res) => {
 
     // Cache the image
     if (imageCache.size >= CACHE_MAX_SIZE) {
-      // Remove oldest entries
       const oldest = [...imageCache.entries()]
         .sort((a, b) => a[1].timestamp - b[1].timestamp)
         .slice(0, 20);
