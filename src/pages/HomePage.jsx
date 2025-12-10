@@ -72,7 +72,8 @@ function MangaCard({ manga, index, onNavigate }) {
             src={cover} 
             alt="" 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            loading="lazy" 
+            loading="lazy"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
@@ -137,6 +138,7 @@ function SectionCard({ manga, onNavigate }) {
             src={cover} 
             alt="" 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900" />
@@ -465,20 +467,30 @@ export default function HomePage() {
     prefetchCache.current.clear();
   }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags]);
 
-  // Track skips remaining when restoring (need to skip multiple effect runs)
-  const restoreSkipsRemaining = useRef(shouldSkipFetch ? 3 : 0);
+  // Track if we're in restore mode - cleared after first user interaction
+  const isRestoreMode = useRef(shouldSkipFetch);
+  const hasUserInteracted = useRef(false);
+  
+  // Clear restore mode when user explicitly changes search
+  const prevSearch = useRef(search);
   
   // Reset and fetch when filters change (skip if restoring from saved state)
   useEffect(() => {
-    // Skip multiple cycles while restoring from saved state
-    // This prevents re-fetch when sources effect, tags effect, etc. trigger changes
-    if (restoreSkipsRemaining.current > 0) {
-      restoreSkipsRemaining.current--;
-      console.log('[MangaFox] Restoring state - skipping fetch. Skips remaining:', restoreSkipsRemaining.current, 'Manga count:', manga.length);
+    // If search changed, user has interacted - disable restore mode
+    if (search !== prevSearch.current) {
+      prevSearch.current = search;
+      hasUserInteracted.current = true;
+      isRestoreMode.current = false;
+    }
+    
+    // Skip only on initial load when restoring, but not if user has interacted
+    if (isRestoreMode.current && !hasUserInteracted.current && manga.length > 0) {
+      console.log('[MangaFox] Restoring state - skipping fetch. Manga count:', manga.length);
+      isRestoreMode.current = false; // Clear after first skip
       return;
     }
     
-    console.log('[MangaFox] Filters changed - sort:', sortBy, 'type:', contentType, 'rating:', contentRating, 'sources:', selectedSources);
+    console.log('[MangaFox] Filters changed - sort:', sortBy, 'type:', contentType, 'rating:', contentRating, 'sources:', selectedSources, 'search:', search);
     
     setManga([]);
     setPage(1);
@@ -611,6 +623,8 @@ export default function HomePage() {
   };
 
   const clearFilters = () => {
+    setQuery('');
+    setSearch('');
     setSelectedTags([]);
     setExcludedTags([]);
     setContentRating('safe');
@@ -732,7 +746,14 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center gap-4">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 shrink-0">
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 shrink-0"
+              onClick={() => {
+                clearFilters();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+            >
               <Logo size={36} />
               <span className="text-xl font-bold hidden sm:block">
                 <span className="text-gradient">Manga</span>

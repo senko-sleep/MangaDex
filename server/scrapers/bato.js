@@ -9,25 +9,11 @@ export class BatoScraper extends BaseScraper {
     super('Bato', 'https://bato.to', false);
   }
 
-  // Helper to create proxy URL - returns absolute URL for cross-origin access
-  // For Bato, we skip proxying covers since their CDN blocks server requests
-  // but allows browser requests (no CORS issues for img tags)
-  proxyUrl(url, skipProxy = false) {
-    if (!url) return '';
-    // Skip proxy for Bato CDN - browser can load directly
-    if (skipProxy || this.shouldSkipProxy(url)) {
-      return url;
-    }
-    const base = API_BASE || '';
-    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
-  }
-  
-  // Check if URL should skip proxy (Bato CDN blocks server requests)
-  shouldSkipProxy(url) {
-    if (!url) return false;
-    // Bato CDN domains - they block server-side requests but work in browser
-    return url.match(/^https?:\/\/[nks]\d+\.mb[a-z]+\.org\//i) ||
-           url.match(/^https?:\/\/[nks]\d+\.[a-z]+\.org\/(?:thumb|media)\//i);
+  // Return direct URL for Bato - their CDN blocks server requests but allows browser
+  // with no-referrer policy. The client will use referrerPolicy="no-referrer" on img tags.
+  proxyUrl(url) {
+    if (!url) return url || '';
+    return url;
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {

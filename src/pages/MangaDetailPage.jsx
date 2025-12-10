@@ -293,6 +293,7 @@ export default function MangaDetailPage() {
             src={coverUrl} 
             alt="" 
             className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-40"
+            referrerPolicy="no-referrer"
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
@@ -339,6 +340,7 @@ export default function MangaDetailPage() {
                   src={coverUrl} 
                   alt={manga.title} 
                   className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                   onError={(e) => {
                     e.target.onerror = null;
                     setCoverUrl(PLACEHOLDER_COVER);
