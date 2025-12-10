@@ -400,6 +400,8 @@ app.get('/api/manga/search', async (req, res) => {
       page: parseInt(page, 10),
       tags: tags ? tags.split(',') : [],
       excludeTags: exclude ? exclude.split(',') : [],
+      status,
+      sort,
     };
 
     log.debug('Search request', { query: q, sources: sourceIds, adult, status, sort, page });

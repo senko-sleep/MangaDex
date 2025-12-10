@@ -43,15 +43,26 @@ export class MangaDexScraper extends BaseScraper {
     }).filter(Boolean);
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false, language = null, sort = 'popular') {
     try {
       const offset = (page - 1) * 50;
       const params = new URLSearchParams();
       params.append('limit', '50'); // Max allowed by MangaDex API
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
-      params.append('order[followedCount]', 'desc');
       params.append('hasAvailableChapters', 'true');
+      
+      // Map sort option to MangaDex API order parameters
+      if (sort === 'latest') {
+        params.append('order[createdAt]', 'desc');
+      } else if (sort === 'updated') {
+        params.append('order[latestUploadedChapter]', 'desc');
+      } else if (sort === 'rating') {
+        params.append('order[rating]', 'desc');
+      } else {
+        // Default: popular by followers
+        params.append('order[followedCount]', 'desc');
+      }
       
       // Content ratings
       params.append('contentRating[]', 'safe');
@@ -95,8 +106,8 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
-    return this.search('', page, includeAdult, tags, excludeTags, status);
+  async getPopular(page = 1, includeAdult = true, sort = 'popular') {
+    return this.search('', page, includeAdult, [], [], null, false, null, sort);
   }
 
   async getLatest(page = 1, includeAdult = true) {

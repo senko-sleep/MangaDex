@@ -16,7 +16,7 @@ export class BatoScraper extends BaseScraper {
     return url;
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false, language = null, sort = 'popular') {
     try {
       const params = new URLSearchParams();
       if (query) params.set('word', query);
@@ -38,11 +38,17 @@ export class BatoScraper extends BaseScraper {
         }
       }
       
-      // Sort by popularity
-      params.set('sort', 'views_a');
+      // Map sort option to Bato's sort values
+      const sortMap = {
+        'popular': 'views_a',   // Most views all time
+        'latest': 'create',      // Newest added
+        'updated': 'update',     // Recently updated
+        'rating': 'score',       // Highest rated
+      };
+      params.set('sort', sortMap[sort] || 'views_a');
       
       const searchUrl = `${this.baseUrl}/v3x-search?${params}`;
-      console.log('[Bato] Searching:', searchUrl);
+      console.log('[Bato] Searching:', searchUrl, 'sort:', sort);
       
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
@@ -54,11 +60,18 @@ export class BatoScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true) {
+  async getPopular(page = 1, includeAdult = true, sort = 'popular') {
     try {
-      // Bato browse page with sorting by views
-      const url = `${this.baseUrl}/v3x-search?langs=en&sort=views_a&page=${page}`;
-      console.log('[Bato] Fetching popular:', url);
+      // Map sort option to Bato's sort values
+      const sortMap = {
+        'popular': 'views_a',   // Most views all time
+        'latest': 'create',      // Newest added
+        'updated': 'update',     // Recently updated
+        'rating': 'score',       // Highest rated
+      };
+      const batoSort = sortMap[sort] || 'views_a';
+      const url = `${this.baseUrl}/v3x-search?langs=en&sort=${batoSort}&page=${page}`;
+      console.log('[Bato] Fetching:', url, 'sort:', sort);
       
       const $ = await this.fetch(url);
       if (!$) return [];

@@ -51,10 +51,16 @@ const getMangaElementId = (mangaId) => {
 };
 
 // Manga Card Component
-function MangaCard({ manga, index, onNavigate }) {
+function MangaCard({ manga, index, onNavigate, onImageError }) {
   const cover = getCoverUrl(manga);
   const sourceId = manga.sourceId || manga.id?.split(':')[0];
   const elementId = getMangaElementId(manga.id);
+  
+  // If no cover, report as failed immediately
+  if (!cover) {
+    onImageError?.(manga.id);
+    return null;
+  }
   
   return (
     <Link 
@@ -67,19 +73,14 @@ function MangaCard({ manga, index, onNavigate }) {
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
         {/* Cover Image */}
-        {cover ? (
-          <img 
-            src={cover} 
-            alt="" 
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-            <BookOpen className="w-8 h-8 text-zinc-700" />
-          </div>
-        )}
+        <img 
+          src={cover} 
+          alt="" 
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => onImageError?.(manga.id)}
+        />
         
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
@@ -243,6 +244,16 @@ export default function HomePage() {
       hasMore,
     }, mangaId);
   }, [search, contentRating, contentType, selectedSources, statusFilter, sortBy, selectedTags, excludedTags, gridSize, manga, page, hasMore]);
+
+  // Track failed images to avoid repeated removals
+  const failedImages = useRef(new Set());
+  
+  // Remove manga from results when cover fails to load
+  const handleImageError = useCallback((mangaId) => {
+    if (failedImages.current.has(mangaId)) return;
+    failedImages.current.add(mangaId);
+    setManga(prev => prev.filter(m => m.id !== mangaId));
+  }, []);
 
   // Fetch homepage sections (new manga, recently updated)
   useEffect(() => {
@@ -1222,7 +1233,7 @@ export default function HomePage() {
           {!initialLoad && manga.length > 0 && (
             <div className={`grid ${gridCols[gridSize]}`}>
               {manga.map((m, i) => (
-                <MangaCard key={m.id} manga={m} index={i} onNavigate={handleNavigateToManga} />
+                <MangaCard key={m.id} manga={m} index={i} onNavigate={handleNavigateToManga} onImageError={handleImageError} />
               ))}
             </div>
           )}

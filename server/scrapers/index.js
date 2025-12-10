@@ -268,6 +268,7 @@ export async function search(query, options = {}) {
     tags = [],
     excludeTags = [],
     status = null,
+    sort = 'popular',
   } = options;
 
   // Parse smart query for artist, tags, etc.
@@ -280,7 +281,7 @@ export async function search(query, options = {}) {
   if (parsed.group) effectiveTags.push(`group:${parsed.group}`);
   if (parsed.parody) effectiveTags.push(`parody:${parsed.parody}`);
 
-  const cacheKey = `search:${query}:${page}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
+  const cacheKey = `search:${query}:${page}:${sort}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -304,7 +305,8 @@ export async function search(query, options = {}) {
             effectiveExcludeTags, 
             status, 
             adultOnly,
-            parsed.language // Pass language for sources that support it
+            parsed.language, // Pass language for sources that support it
+            sort // Pass sort option to scraper
           ),
           getTimeoutForSource(sourceId)
         );
@@ -326,9 +328,9 @@ export async function search(query, options = {}) {
 
 // Get popular manga - optimized
 export async function getPopular(options = {}) {
-  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1 } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, sort = 'popular' } = options;
 
-  const cacheKey = `popular:${page}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
+  const cacheKey = `popular:${page}:${sort}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -341,7 +343,7 @@ export async function getPopular(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly), getTimeoutForSource(sourceId));
+        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly, sort), getTimeoutForSource(sourceId));
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
