@@ -248,10 +248,58 @@ function ProgressBar({ current, total, onSeek }) {
   );
 }
 
-// Page Image Component with loading state
-function PageImage({ src, alt, fitMode, onLoad, isVisible }) {
+// Page Image Component with loading state and retry
+function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageIndex }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [imageSrc, setImageSrc] = useState(src);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+
+  const fallbackUrls = useMemo(() => {
+    if (!src || typeof src !== 'string') return [];
+    const match = src.match(/^https?:\/\/k(\d{2})\.([a-z0-9-]+\.[a-z]+)\//i);
+    if (!match) return [];
+    const current = match[1];
+    const domain = match[2];
+    const urls = [];
+    for (let i = 0; i <= 9; i++) {
+      const k = `k0${i}`;
+      if (k === `k${current}`) continue;
+      urls.push(src.replace(/^https?:\/\/k\d{2}\./i, `https://${k}.`));
+    }
+    return urls;
+  }, [src]);
+
+  useEffect(() => {
+    setLoaded(false);
+    setError(false);
+    setRetryCount(0);
+    setFallbackIndex(0);
+    setImageSrc(src);
+  }, [src]);
+
+  const handleError = () => {
+    if (fallbackIndex < fallbackUrls.length) {
+      const nextUrl = fallbackUrls[fallbackIndex];
+      setFallbackIndex(i => i + 1);
+      setLoaded(false);
+      setError(false);
+      setImageSrc(nextUrl);
+      return;
+    }
+    setError(true);
+    onImageError?.(src, pageIndex);
+  };
+
+  const handleRetry = () => {
+    setError(false);
+    setLoaded(false);
+    setRetryCount(c => c + 1);
+    setFallbackIndex(0);
+    // Add cache buster to force reload
+    setImageSrc(`${src}${src.includes('?') ? '&' : '?'}retry=${retryCount + 1}`);
+  };
 
   return (
     <div className="relative flex items-center justify-center min-h-[200px]">
@@ -262,18 +310,30 @@ function PageImage({ src, alt, fitMode, onLoad, isVisible }) {
       )}
       {error ? (
         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-          <X className="w-12 h-12 mb-2" />
-          <p>Failed to load image</p>
+          <X className="w-12 h-12 mb-2 text-red-500/50" />
+          <p className="font-medium">Failed to load image</p>
+          <p className="text-xs mt-1 mb-3">Page {pageIndex + 1}</p>
+          <p className="text-xs text-zinc-600 mb-4 max-w-xs text-center">
+            Source server may be temporarily unavailable
+          </p>
+          <button
+            onClick={handleRetry}
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       ) : (
         <img
-          src={src}
+          src={imageSrc}
           alt={alt}
           className={`w-full h-auto max-w-5xl mx-auto select-none ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => { setLoaded(true); onLoad?.(); }}
-          onError={() => setError(true)}
+          onError={handleError}
           loading={isVisible ? 'eager' : 'lazy'}
           draggable={false}
+          referrerPolicy="no-referrer"
         />
       )}
     </div>
@@ -311,6 +371,31 @@ export default function ChapterReaderPage() {
   useEffect(() => {
     localStorage.setItem('readerSettings', JSON.stringify(settings));
   }, [settings]);
+
+  // Track reported images to avoid duplicate reports
+  const reportedImages = useRef(new Set());
+  
+  // Report failed images to the server
+  const handleImageError = useCallback((url, pageIndex) => {
+    if (!url || reportedImages.current.has(url)) return;
+    reportedImages.current.add(url);
+    
+    const mangaId = decodeURIComponent(id);
+    console.warn('[Reader] Image failed to load:', { page: pageIndex + 1, url: url.substring(0, 80) });
+    
+    // Report to server
+    fetch(apiUrl('/api/report/image-fail'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        mangaId,
+        chapterId,
+        page: pageIndex + 1,
+        error: 'load_error'
+      })
+    }).catch(() => {}); // Silent fail
+  }, [id, chapterId]);
 
   const isLongStrip = location.state?.isLongStrip;
   const preferredLang = location.state?.preferredLang || 'en';
@@ -736,6 +821,8 @@ export default function ChapterReaderPage() {
                 alt={`Page ${i + 1}`}
                 fitMode={settings.fitMode}
                 isVisible={i < settings.preloadPages}
+                onImageError={handleImageError}
+                pageIndex={i}
               />
             ))}
           </div>
@@ -800,6 +887,8 @@ export default function ChapterReaderPage() {
                 className="object-contain select-none"
                 style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
+                onError={() => handleImageError(pages[currentPage].url, currentPage)}
+                referrerPolicy="no-referrer"
               />
             )}
             {pages[currentPage + 1] && (
@@ -809,6 +898,8 @@ export default function ChapterReaderPage() {
                 className="object-contain select-none"
                 style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
+                onError={() => handleImageError(pages[currentPage + 1].url, currentPage + 1)}
+                referrerPolicy="no-referrer"
               />
             )}
           </div>
@@ -848,6 +939,8 @@ export default function ChapterReaderPage() {
                 maxWidth: 'calc(100vw - 4rem)'
               }}
               draggable={false}
+              onError={() => handleImageError(pages[currentPage].url, currentPage)}
+              referrerPolicy="no-referrer"
             />
           )}
 

@@ -65,6 +65,10 @@ export class NHentaiScraper extends BaseScraper {
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+    // Ensure tags is an array
+    if (!Array.isArray(tags)) tags = [];
+    if (!Array.isArray(excludeTags)) excludeTags = [];
+    
     try {
       // Build search query - nhentai.xxx supports tag search in query
       let searchQuery = query || '';
@@ -75,12 +79,12 @@ export class NHentaiScraper extends BaseScraper {
       }
       
       // Add tags to search query if provided
-      if (tags && tags.length > 0) {
+      if (tags.length > 0) {
         searchQuery += ' ' + tags.join(' ');
       }
       
       // Add excluded tags with minus prefix
-      if (excludeTags && excludeTags.length > 0) {
+      if (excludeTags.length > 0) {
         searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
       }
       
@@ -103,6 +107,10 @@ export class NHentaiScraper extends BaseScraper {
   }
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+    // Ensure tags is an array
+    if (!Array.isArray(tags)) tags = [];
+    if (!Array.isArray(excludeTags)) excludeTags = [];
+    
     try {
       // If tags or language provided, use search with popular sort
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
@@ -130,6 +138,10 @@ export class NHentaiScraper extends BaseScraper {
   }
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+    // Ensure tags is an array
+    if (!Array.isArray(tags)) tags = [];
+    if (!Array.isArray(excludeTags)) excludeTags = [];
+    
     try {
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {

@@ -93,6 +93,57 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Validate that a buffer contains a valid image
+function validateImageBuffer(buffer, contentType) {
+  // Check minimum size (valid images are usually > 100 bytes)
+  if (!buffer || buffer.length < 100) {
+    return { valid: false, reason: 'too_small' };
+  }
+  
+  // Check content type
+  if (contentType && !contentType.startsWith('image/')) {
+    // Could be HTML error page
+    const text = buffer.toString('utf8', 0, Math.min(500, buffer.length));
+    if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('<HTML')) {
+      return { valid: false, reason: 'html_error_page' };
+    }
+    return { valid: false, reason: 'wrong_content_type' };
+  }
+  
+  // Check magic bytes for common image formats
+  const magicBytes = buffer.slice(0, 16);
+  
+  // JPEG: starts with FF D8 FF
+  const isJpeg = magicBytes[0] === 0xFF && magicBytes[1] === 0xD8 && magicBytes[2] === 0xFF;
+  
+  // PNG: starts with 89 50 4E 47 0D 0A 1A 0A
+  const isPng = magicBytes[0] === 0x89 && magicBytes[1] === 0x50 && 
+                magicBytes[2] === 0x4E && magicBytes[3] === 0x47;
+  
+  // GIF: starts with GIF87a or GIF89a
+  const isGif = magicBytes[0] === 0x47 && magicBytes[1] === 0x49 && magicBytes[2] === 0x46;
+  
+  // WebP: starts with RIFF....WEBP
+  const isWebp = magicBytes[0] === 0x52 && magicBytes[1] === 0x49 && 
+                 magicBytes[2] === 0x46 && magicBytes[3] === 0x46 &&
+                 magicBytes[8] === 0x57 && magicBytes[9] === 0x45 &&
+                 magicBytes[10] === 0x42 && magicBytes[11] === 0x50;
+  
+  // BMP: starts with BM
+  const isBmp = magicBytes[0] === 0x42 && magicBytes[1] === 0x4D;
+  
+  if (!isJpeg && !isPng && !isGif && !isWebp && !isBmp) {
+    // Check if it's HTML
+    const text = buffer.toString('utf8', 0, Math.min(500, buffer.length));
+    if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('<HTML') || text.includes('Access Denied')) {
+      return { valid: false, reason: 'html_error_page' };
+    }
+    return { valid: false, reason: 'invalid_magic_bytes' };
+  }
+  
+  return { valid: true };
+}
+
 // Auto-detect source from URL and return appropriate referer
 function getRefererForUrl(url) {
   if (!url) return 'https://mangadex.org/';
@@ -116,12 +167,14 @@ function getRefererForUrl(url) {
     if (hostname.includes('hitomi')) {
       return 'https://hitomi.la/';
     }
-    // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, or /media/ path)
-    if (hostname.match(/^[ns]\d+\.[a-z]+\.org$/) ||
+    // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, k##.xxx.org, or /media/ path)
+    if (hostname.match(/^[nsk]\d+\.[a-z]+\.org$/) ||
         hostname.match(/^xfs-[ns]\d+\.[a-z]+\.org$/) ||
         hostname.includes('mbimg') || hostname.includes('mbuul') || 
         hostname.includes('mbznp') || hostname.includes('mbcej') ||
         hostname.includes('mbeaj') || hostname.includes('mbwnp') ||
+        hostname.includes('mbfpu') || hostname.includes('mbhiz') ||
+        hostname.includes('mbtba') || hostname.includes('mbch') ||
         hostname.includes('meo.org') || hostname.includes('bato') ||
         urlLower.includes('/media/mb')) {
       return 'https://bato.to/';
@@ -301,6 +354,24 @@ app.get('/api/proxy/image', async (req, res) => {
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const buffer = Buffer.from(await response.arrayBuffer());
 
+    // Validate the response is actually an image
+    const isValidImage = validateImageBuffer(buffer, contentType);
+    if (!isValidImage.valid) {
+      const source = new URL(imageUrl).hostname.split('.').slice(-2, -1)[0] || 'unknown';
+      log.error('🖼️ INVALID IMAGE', { 
+        reason: isValidImage.reason,
+        source,
+        size: buffer.length,
+        contentType,
+        url: imageUrl.substring(0, 100)
+      });
+      return res.status(422).json({ 
+        error: 'Invalid image', 
+        reason: isValidImage.reason,
+        source 
+      });
+    }
+
     // Cache the image
     if (imageCache.size >= CACHE_MAX_SIZE) {
       const oldest = [...imageCache.entries()]
@@ -323,6 +394,39 @@ app.get('/api/proxy/image', async (req, res) => {
     const source = imageUrl ? new URL(imageUrl).hostname : 'unknown';
     log.error('Image proxy error', { error: e.message, source, url: imageUrl?.substring(0, 100) });
     res.status(500).send('Proxy error');
+  }
+});
+
+// Report failed image from client (manga reader)
+app.post('/api/report/image-fail', express.json(), (req, res) => {
+  const { url, mangaId, chapterId, page, error } = req.body;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'Missing url' });
+  }
+  
+  try {
+    // url may be absolute (https://...) or relative (/api/proxy/image?...)
+    // Use a dummy base for relative URLs so URL parsing doesn't throw.
+    const parsedUrl = new URL(url, 'http://localhost');
+    const hostname = parsedUrl.hostname || '';
+    const source = hostname
+      ? (hostname.split('.').slice(-2, -1)[0] || hostname)
+      : 'local';
+    
+    log.error('🖼️ CLIENT IMAGE FAIL', { 
+      source,
+      mangaId: mangaId || 'unknown',
+      chapterId: chapterId || 'unknown',
+      page: page || 'unknown',
+      error: error || 'load error',
+      url: url.substring(0, 120)
+    });
+    
+    res.json({ reported: true });
+  } catch (e) {
+    log.error('Failed to report image', { error: e.message });
+    res.json({ reported: false });
   }
 });
 
