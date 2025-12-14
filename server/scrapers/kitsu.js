@@ -81,10 +81,6 @@ export class KitsuScraper extends BaseScraper {
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       const offset = (page - 1) * 20; // Kitsu max is 20
       // Build URL manually to avoid bracket encoding issues
@@ -120,10 +116,6 @@ export class KitsuScraper extends BaseScraper {
   }
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       const offset = (page - 1) * 20; // Kitsu max is 20
       // Build URL manually to avoid bracket encoding issues
@@ -155,10 +147,6 @@ export class KitsuScraper extends BaseScraper {
   }
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], status = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       const offset = (page - 1) * 20; // Kitsu max is 20
       // Build URL manually to avoid bracket encoding issues

@@ -9,8 +9,8 @@ export class BatoScraper extends BaseScraper {
     super('Bato', 'https://bato.to', false);
   }
 
-  // Return direct URL for Bato - their CDN often blocks server requests.
-  // Browser must load with referrerPolicy="no-referrer" to bypass hotlink protection.
+  // Return direct URL for Bato - their CDN blocks server requests
+  // Browser must load with referrerPolicy="no-referrer" to bypass hotlink protection
   proxyUrl(url) {
     if (!url) return url || '';
     return url;

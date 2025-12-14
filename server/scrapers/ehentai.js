@@ -26,10 +26,6 @@ export class EHentaiScraper extends BaseScraper {
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       // Build search query with tags
       let searchQuery = query || '';
@@ -57,10 +53,6 @@ export class EHentaiScraper extends BaseScraper {
   }
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       // If tags or language provided, use search instead
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
@@ -78,10 +70,6 @@ export class EHentaiScraper extends BaseScraper {
   }
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
-    // Ensure tags is an array
-    if (!Array.isArray(tags)) tags = [];
-    if (!Array.isArray(excludeTags)) excludeTags = [];
-    
     try {
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {

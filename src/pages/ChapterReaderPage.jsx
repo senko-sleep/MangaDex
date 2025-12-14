@@ -254,40 +254,8 @@ function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageInd
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [imageSrc, setImageSrc] = useState(src);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
-
-  const fallbackUrls = useMemo(() => {
-    if (!src || typeof src !== 'string') return [];
-    const match = src.match(/^https?:\/\/k(\d{2})\.([a-z0-9-]+\.[a-z]+)\//i);
-    if (!match) return [];
-    const current = match[1];
-    const domain = match[2];
-    const urls = [];
-    for (let i = 0; i <= 9; i++) {
-      const k = `k0${i}`;
-      if (k === `k${current}`) continue;
-      urls.push(src.replace(/^https?:\/\/k\d{2}\./i, `https://${k}.`));
-    }
-    return urls;
-  }, [src]);
-
-  useEffect(() => {
-    setLoaded(false);
-    setError(false);
-    setRetryCount(0);
-    setFallbackIndex(0);
-    setImageSrc(src);
-  }, [src]);
 
   const handleError = () => {
-    if (fallbackIndex < fallbackUrls.length) {
-      const nextUrl = fallbackUrls[fallbackIndex];
-      setFallbackIndex(i => i + 1);
-      setLoaded(false);
-      setError(false);
-      setImageSrc(nextUrl);
-      return;
-    }
     setError(true);
     onImageError?.(src, pageIndex);
   };
@@ -296,7 +264,6 @@ function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageInd
     setError(false);
     setLoaded(false);
     setRetryCount(c => c + 1);
-    setFallbackIndex(0);
     // Add cache buster to force reload
     setImageSrc(`${src}${src.includes('?') ? '&' : '?'}retry=${retryCount + 1}`);
   };

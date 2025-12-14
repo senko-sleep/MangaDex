@@ -167,14 +167,12 @@ function getRefererForUrl(url) {
     if (hostname.includes('hitomi')) {
       return 'https://hitomi.la/';
     }
-    // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, k##.xxx.org, or /media/ path)
-    if (hostname.match(/^[nsk]\d+\.[a-z]+\.org$/) ||
+    // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, or /media/ path)
+    if (hostname.match(/^[ns]\d+\.[a-z]+\.org$/) ||
         hostname.match(/^xfs-[ns]\d+\.[a-z]+\.org$/) ||
         hostname.includes('mbimg') || hostname.includes('mbuul') || 
         hostname.includes('mbznp') || hostname.includes('mbcej') ||
         hostname.includes('mbeaj') || hostname.includes('mbwnp') ||
-        hostname.includes('mbfpu') || hostname.includes('mbhiz') ||
-        hostname.includes('mbtba') || hostname.includes('mbch') ||
         hostname.includes('meo.org') || hostname.includes('bato') ||
         urlLower.includes('/media/mb')) {
       return 'https://bato.to/';
@@ -406,13 +404,8 @@ app.post('/api/report/image-fail', express.json(), (req, res) => {
   }
   
   try {
-    // url may be absolute (https://...) or relative (/api/proxy/image?...)
-    // Use a dummy base for relative URLs so URL parsing doesn't throw.
-    const parsedUrl = new URL(url, 'http://localhost');
-    const hostname = parsedUrl.hostname || '';
-    const source = hostname
-      ? (hostname.split('.').slice(-2, -1)[0] || hostname)
-      : 'local';
+    const hostname = new URL(url).hostname;
+    const source = hostname.split('.').slice(-2, -1)[0] || 'unknown';
     
     log.error('🖼️ CLIENT IMAGE FAIL', { 
       source,
