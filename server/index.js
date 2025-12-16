@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import scrapers from './scrapers/index.js';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -92,6 +93,24 @@ app.use(cors({
   credentials: false,
 }));
 app.use(express.json());
+
+// ETag helper for JSON responses
+function makeWeakEtagForJson(obj) {
+  const json = JSON.stringify(obj);
+  const hash = crypto.createHash('sha1').update(json).digest('base64');
+  return `W/\"${hash}\"`;
+}
+
+function sendJsonWithCache(req, res, payload, cacheControl) {
+  const etag = makeWeakEtagForJson(payload);
+  res.set('ETag', etag);
+  if (cacheControl) res.set('Cache-Control', cacheControl);
+  if (req.headers['if-none-match'] && req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.json(payload);
+}
 
 // Validate that a buffer contains a valid image
 function validateImageBuffer(buffer, contentType) {
@@ -551,7 +570,15 @@ app.get('/api/manga/search', async (req, res) => {
       log.api('GET', '/api/manga/search', 200, duration, { results: data.length, query: q || '(popular)' });
     }
 
-    res.json({ data, total: data.length });
+    // Let CDNs / Firebase Hosting cache the heavy initial popular results.
+    // Keep it short-lived and allow stale while revalidating.
+    const isCacheablePopular = !q && !sourceIds && !tags && !exclude && page === '1' && sort === 'popular';
+    if (isCacheablePopular) {
+      const cacheControl = 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+      return sendJsonWithCache(req, res, { data, total: data.length }, cacheControl);
+    }
+
+    return sendJsonWithCache(req, res, { data, total: data.length }, 'no-store');
   } catch (e) {
     const duration = Date.now() - startTime;
     log.error('Search failed', { error: e.message, stack: e.stack, duration });

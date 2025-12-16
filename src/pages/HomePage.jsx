@@ -7,7 +7,7 @@ import {
   Plus, Star, RefreshCw, Layers, Database, ImageIcon, Gamepad2,
   Globe, Palette, Camera, Book
 } from 'lucide-react';
-import { apiUrl } from '../lib/api';
+import { apiUrl, getJsonCached } from '../lib/api';
 import { getCoverUrl } from '../lib/imageUtils';
 import Logo from '../components/Logo';
 
@@ -260,14 +260,9 @@ export default function HomePage() {
     const fetchSections = async () => {
       setSectionsLoading(true);
       try {
-        const [newRes, latestRes] = await Promise.all([
-          fetch(apiUrl('/api/manga/new?adult=false')),
-          fetch(apiUrl('/api/manga/latest?adult=false'))
-        ]);
-        
         const [newData, latestData] = await Promise.all([
-          newRes.json(),
-          latestRes.json()
+          getJsonCached('/api/manga/new?adult=false', { ttlMs: 5 * 60_000 }),
+          getJsonCached('/api/manga/latest?adult=false', { ttlMs: 5 * 60_000 }),
         ]);
         
         setNewManga((newData.data || []).slice(0, 12));
@@ -301,7 +296,7 @@ export default function HomePage() {
       adultOnly = 'true';
     }
     
-    fetch(apiUrl(`/api/sources?adult=${adult}&adultOnly=${adultOnly}`)).then(r => r.json()).then(d => {
+    getJsonCached(`/api/sources?adult=${adult}&adultOnly=${adultOnly}`, { ttlMs: 5 * 60_000 }).then(d => {
       setSources(d.sources || []);
       setEnabledSources(d.enabled || []);
       setContentTypes(d.contentTypes || []);
@@ -320,8 +315,7 @@ export default function HomePage() {
       try {
         const sourcesParam = selectedSources.length > 0 ? `&sources=${selectedSources.join(',')}` : '';
         const adultParam = contentRating !== 'safe';
-        const res = await fetch(apiUrl(`/api/tags?adult=${adultParam}${sourcesParam}`));
-        const data = await res.json();
+        const data = await getJsonCached(`/api/tags?adult=${adultParam}${sourcesParam}`, { ttlMs: 10 * 60_000 });
         setAllTags(data.tags || []);
         setTagsBySource(data.bySource || {});
       } catch (e) {
@@ -332,68 +326,6 @@ export default function HomePage() {
     fetchTags();
   }, [selectedSources, contentRating]);
   
-  // Handle source filter from navigation (when coming back from manga details)
-  useEffect(() => {
-    if (filterSourceFromNav) {
-      // Check if the source matches what we had saved - if so, keep the saved state
-      const savedSourceMatches = savedState?.selectedSources?.length === 1 && 
-                                  savedState.selectedSources[0] === filterSourceFromNav;
-      
-      if (!savedSourceMatches) {
-        // Source is different or no saved state - apply the new filter
-        // This will trigger a re-fetch with the new source
-        setSelectedSources([filterSourceFromNav]);
-      }
-      // Clear the navigation state to prevent re-applying on refresh
-      window.history.replaceState({}, document.title);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSourceFromNav]);
-
-  const buildUrl = useCallback((p = 1) => {
-    const params = new URLSearchParams();
-    if (search) params.set('q', search);
-    params.set('page', p);
-    
-    // Content rating filter - simple approach like safe filter
-    // adult=false → safe+suggestive only
-    // adult=true → all content
-    // adult=only → erotica+pornographic only
-    if (contentRating === 'safe') {
-      params.set('adult', 'false');
-    } else if (contentRating === 'adult') {
-      params.set('adult', 'only');
-    } else {
-      params.set('adult', 'true');
-    }
-    
-    // Content type filter (manga, doujinshi, artistcg, etc.)
-    if (contentType && contentType !== 'all') {
-      params.set('type', contentType);
-    }
-    
-    // Source filter
-    if (selectedSources.length > 0) {
-      params.set('sources', selectedSources.join(','));
-    }
-    
-    // Status filter
-    if (statusFilter !== 'all') {
-      params.set('status', statusFilter);
-    }
-    
-    // Sort filter
-    if (sortBy) {
-      params.set('sort', sortBy);
-    }
-    
-    // Tag filters
-    if (selectedTags.length) params.set('tags', selectedTags.join(','));
-    if (excludedTags.length) params.set('exclude', excludedTags.join(','));
-    
-    return apiUrl(`/api/manga/search?${params}`);
-  }, [search, selectedTags, excludedTags, contentRating, contentType, selectedSources, statusFilter, sortBy]);
-
   // Prefetch cache for next page
   const prefetchCache = useRef(new Map());
   const prefetchInProgress = useRef(new Set());
@@ -410,11 +342,8 @@ export default function HomePage() {
     
     prefetchInProgress.current.add(cacheKey);
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const json = await res.json();
-        prefetchCache.current.set(cacheKey, json.data || []);
-      }
+      const json = await getJsonCached(url.replace(API_URL, ''), { ttlMs: 30_000 }).catch(() => null);
+      if (json) prefetchCache.current.set(cacheKey, json.data || []);
     } catch {
       // Silent fail for prefetch
     } finally {
@@ -438,21 +367,14 @@ export default function HomePage() {
         console.log('[MangaFox] Using prefetched data for page', p);
       } else {
         console.log('[MangaFox] Fetching manga:', url);
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        const json = await res.json();
+        const relative = url.startsWith(API_URL) ? url.slice(API_URL.length) : url;
+        const json = await getJsonCached(relative, { ttlMs: 60_000 });
         data = json.data || [];
       }
       
       // Filter out safe content when 18+ only is selected
       if (contentRating === 'adult') {
         data = data.filter(m => m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic');
-      }
-      
-      if (data.length === 0 && reset) {
-        console.log('[MangaFox] No results found for current filters');
       }
       
       setManga(prev => reset ? data : [...prev, ...data]);
@@ -529,10 +451,7 @@ export default function HomePage() {
         
         const url = apiUrl(`/api/manga/search?${params}`);
         console.log('[MangaFox] Fetching:', url);
-        
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await getJsonCached(`/api/manga/search?${params}`, { ttlMs: 60_000 });
         let data = json.data || [];
         
         if (contentRating === 'adult') {
