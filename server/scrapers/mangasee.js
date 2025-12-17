@@ -3,7 +3,7 @@ import BaseScraper from './base.js';
 // MangaSee123 - Very reliable, fast, good quality
 export class MangaSeeScraper extends BaseScraper {
   constructor() {
-    // MangaSee moved to manga4life.com
+  // MangaSee moved to manga4life.com
     super('MangaSee', 'https://manga4life.com', false);
     this.searchCache = null;
     this.searchCacheTime = 0;

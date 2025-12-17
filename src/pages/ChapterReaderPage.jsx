@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, Settings, X, Maximize, Minimize,
@@ -7,6 +7,7 @@ import {
   Monitor, Smartphone, ArrowLeftRight, ChevronUp, ChevronDown, Eye
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
+import { getChapterPages as getMangaDexPages } from '../lib/mangadex';
 
 // Reading settings defaults
 const DEFAULT_SETTINGS = {
@@ -247,10 +248,25 @@ function ProgressBar({ current, total, onSeek }) {
   );
 }
 
-// Page Image Component with loading state
-function PageImage({ src, alt, fitMode, onLoad, isVisible }) {
+// Page Image Component with loading state and retry
+function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageIndex }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [imageSrc, setImageSrc] = useState(src);
+
+  const handleError = () => {
+    setError(true);
+    onImageError?.(src, pageIndex);
+  };
+
+  const handleRetry = () => {
+    setError(false);
+    setLoaded(false);
+    setRetryCount(c => c + 1);
+    // Add cache buster to force reload
+    setImageSrc(`${src}${src.includes('?') ? '&' : '?'}retry=${retryCount + 1}`);
+  };
 
   return (
     <div className="relative flex items-center justify-center min-h-[200px]">
@@ -261,18 +277,30 @@ function PageImage({ src, alt, fitMode, onLoad, isVisible }) {
       )}
       {error ? (
         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-          <X className="w-12 h-12 mb-2" />
-          <p>Failed to load image</p>
+          <X className="w-12 h-12 mb-2 text-red-500/50" />
+          <p className="font-medium">Failed to load image</p>
+          <p className="text-xs mt-1 mb-3">Page {pageIndex + 1}</p>
+          <p className="text-xs text-zinc-600 mb-4 max-w-xs text-center">
+            Source server may be temporarily unavailable
+          </p>
+          <button
+            onClick={handleRetry}
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       ) : (
         <img
-          src={src}
+          src={imageSrc}
           alt={alt}
           className={`w-full h-auto max-w-5xl mx-auto select-none ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => { setLoaded(true); onLoad?.(); }}
-          onError={() => setError(true)}
+          onError={handleError}
           loading={isVisible ? 'eager' : 'lazy'}
           draggable={false}
+          referrerPolicy="no-referrer"
         />
       )}
     </div>
@@ -292,6 +320,9 @@ export default function ChapterReaderPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
+  const [showPageInput, setShowPageInput] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
+  const pageInputRef = useRef(null);
   
   // Load settings from localStorage or use defaults
   const [settings, setSettings] = useState(() => {
@@ -308,7 +339,33 @@ export default function ChapterReaderPage() {
     localStorage.setItem('readerSettings', JSON.stringify(settings));
   }, [settings]);
 
+  // Track reported images to avoid duplicate reports
+  const reportedImages = useRef(new Set());
+  
+  // Report failed images to the server
+  const handleImageError = useCallback((url, pageIndex) => {
+    if (!url || reportedImages.current.has(url)) return;
+    reportedImages.current.add(url);
+    
+    const mangaId = decodeURIComponent(id);
+    console.warn('[Reader] Image failed to load:', { page: pageIndex + 1, url: url.substring(0, 80) });
+    
+    // Report to server
+    fetch(apiUrl('/api/report/image-fail'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        mangaId,
+        chapterId,
+        page: pageIndex + 1,
+        error: 'load_error'
+      })
+    }).catch(() => {}); // Silent fail
+  }, [id, chapterId]);
+
   const isLongStrip = location.state?.isLongStrip;
+  const preferredLang = location.state?.preferredLang || 'en';
 
   // Determine actual reading mode
   // Force scroll mode for long strip/webtoon manga - they're designed for vertical reading
@@ -320,23 +377,57 @@ export default function ChapterReaderPage() {
     setLoading(true);
     setCurrentPage(0);
     const mangaId = decodeURIComponent(id);
+    
+    // Check if this is a MangaDex manga (UUID format or starts with mangadex:)
+    const isMangaDex = mangaId.startsWith('mangadex:') || 
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mangaId) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
+    
+    // Function to fetch pages from backend API
+    const fetchFromBackend = () => {
+      console.log('[Reader] Fetching pages from backend for:', mangaId, chapterId);
+      return fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`))
+        .then(r => r.json())
+        .then(data => {
+          console.log('[Reader] Backend returned:', data.pages?.length || 0, 'pages');
+          // Transform relative proxy URLs to use full backend URL
+          // This is needed because on Firebase hosting, /api/proxy/image won't work
+          const pages = (data.pages || []).map(page => ({
+            ...page,
+            url: page.url?.startsWith('/api/') ? apiUrl(page.url) : page.url
+          }));
+          return pages;
+        });
+    };
+    
+    // Fetch pages - try MangaDex directly for MangaDex content, otherwise use backend
+    const pagesPromise = isMangaDex 
+      ? getMangaDexPages(chapterId).catch(err => {
+          console.error('[Reader] MangaDex pages error:', err);
+          return fetchFromBackend();
+        })
+      : fetchFromBackend();
+    
+    // Fetch pages and chapters
     Promise.all([
-      fetch(apiUrl(`/api/pages/${mangaId}/${chapterId}`)).then(r => r.json()),
+      pagesPromise,
       fetch(apiUrl(`/api/chapters/${mangaId}`)).then(r => r.json())
-    ]).then(([p, c]) => {
-      const pageData = p.pages || [];
-      setPages(pageData);
+    ]).then(([pageData, c]) => {
+      // Handle both array format and {pages: []} format
+      const pages = Array.isArray(pageData) ? pageData : (pageData?.pages || []);
+      console.log('[Reader] Loaded', pages.length, 'pages');
+      setPages(pages);
       setChapters(c.data || []);
       setLoading(false);
       window.scrollTo(0, 0);
       
       // Preload first few pages immediately
-      pageData.slice(0, 5).forEach(page => {
+      pages.slice(0, 5).forEach(page => {
         const img = new Image();
         img.src = page.url;
       });
     }).catch((e) => {
-      console.error(e);
+      console.error('[Reader] Error loading chapter:', e);
       setLoading(false);
     });
   }, [id, chapterId]);
@@ -362,10 +453,88 @@ export default function ChapterReaderPage() {
     }
   }, [currentPage, pages]);
 
-  const currentIdx = chapters.findIndex(c => c.id === chapterId);
-  const prevChapter = currentIdx < chapters.length - 1 ? chapters[currentIdx + 1] : null;
-  const nextChapter = currentIdx > 0 ? chapters[currentIdx - 1] : null;
-  const currentChapter = chapters[currentIdx];
+  const currentChapter = chapters.find(c => c.id === chapterId);
+  const currentChapterNum = parseFloat(currentChapter?.chapter) || 0;
+  
+  // Use preferred language from navigation state, fallback to current chapter's language
+  const targetLang = preferredLang !== 'all' ? preferredLang : (currentChapter?.language || 'en');
+  
+  // Filtered chapters - only show chapters in the selected language
+  // This is used for the chapter dropdown
+  const filteredChapters = useMemo(() => {
+    // Filter to selected language only (unless "all" is selected)
+    let filtered = preferredLang !== 'all' 
+      ? chapters.filter(c => c.language === targetLang)
+      : chapters;
+    
+    // Deduplicate by chapter number (keep first occurrence)
+    const chapterMap = new Map();
+    for (const ch of filtered) {
+      const rawNum = parseFloat(ch.chapter) || 0;
+      const key = rawNum.toString();
+      if (!chapterMap.has(key)) {
+        chapterMap.set(key, ch);
+      }
+    }
+    
+    // Convert back to array and sort by chapter number descending
+    return Array.from(chapterMap.values()).sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numB - numA;
+    });
+  }, [chapters, targetLang, preferredLang]);
+  
+  // Find next/prev chapters by chapter NUMBER, not array position
+  // Only navigate to chapters in the selected language (strict filtering)
+  const getNextChapter = () => {
+    // Find all chapters with a higher chapter number
+    let higherChapters = chapters.filter(c => {
+      const num = parseFloat(c.chapter) || 0;
+      return num > currentChapterNum;
+    });
+    if (higherChapters.length === 0) return null;
+    
+    // Strictly filter to selected language (no fallback)
+    if (preferredLang !== 'all') {
+      higherChapters = higherChapters.filter(c => c.language === targetLang);
+      if (higherChapters.length === 0) return null;
+    }
+    
+    // Sort by chapter number ascending to get closest next chapter
+    higherChapters.sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numA - numB;
+    });
+    return higherChapters[0];
+  };
+  
+  const getPrevChapter = () => {
+    // Find all chapters with a lower chapter number
+    let lowerChapters = chapters.filter(c => {
+      const num = parseFloat(c.chapter) || 0;
+      return num < currentChapterNum;
+    });
+    if (lowerChapters.length === 0) return null;
+    
+    // Strictly filter to selected language (no fallback)
+    if (preferredLang !== 'all') {
+      lowerChapters = lowerChapters.filter(c => c.language === targetLang);
+      if (lowerChapters.length === 0) return null;
+    }
+    
+    // Sort by chapter number descending to get closest prev chapter
+    lowerChapters.sort((a, b) => {
+      const numA = parseFloat(a.chapter) || 0;
+      const numB = parseFloat(b.chapter) || 0;
+      return numB - numA;
+    });
+    return lowerChapters[0];
+  };
+  
+  const nextChapter = getNextChapter();
+  const prevChapter = getPrevChapter();
 
   // Navigation functions
   const goPage = useCallback((dir) => {
@@ -376,11 +545,11 @@ export default function ChapterReaderPage() {
       setCurrentPage(next);
       window.scrollTo(0, 0);
     } else if (effectiveDir > 0 && nextChapter) {
-      navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } });
+      navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } });
     } else if (effectiveDir < 0 && prevChapter) {
-      navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } });
+      navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } });
     }
-  }, [currentPage, pages.length, settings.direction, nextChapter, prevChapter, navigate, id, isLongStrip]);
+  }, [currentPage, pages.length, settings.direction, nextChapter, prevChapter, navigate, id, isLongStrip, preferredLang]);
 
   const goToPage = (pageNum) => {
     if (pageNum >= 0 && pageNum < pages.length) {
@@ -525,12 +694,12 @@ export default function ChapterReaderPage() {
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             {/* Left */}
             <div className="flex items-center gap-3 min-w-0">
-              <Link 
-                to={`/manga/${id}`} 
+              <button 
+                onClick={() => navigate(-1)}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
-              </Link>
+              </button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">
@@ -551,7 +720,7 @@ export default function ChapterReaderPage() {
             {/* Center - Chapter Navigation */}
             <div className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                 disabled={!prevChapter}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Previous Chapter"
@@ -560,17 +729,17 @@ export default function ChapterReaderPage() {
               </button>
               
               <select
-                value={chapterId}
-                onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip } })}
+                value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
+                onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
                 className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
               >
-                {chapters.map(c => (
-                  <option key={c.id} value={c.id}>Chapter {c.chapter}</option>
+                {filteredChapters.map(c => (
+                  <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
                 ))}
               </select>
               
               <button
-                onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                 disabled={!nextChapter}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Next Chapter"
@@ -619,6 +788,8 @@ export default function ChapterReaderPage() {
                 alt={`Page ${i + 1}`}
                 fitMode={settings.fitMode}
                 isVisible={i < settings.preloadPages}
+                onImageError={handleImageError}
+                pageIndex={i}
               />
             ))}
           </div>
@@ -632,7 +803,7 @@ export default function ChapterReaderPage() {
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 {prevChapter && (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                    onClick={() => navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center gap-2 transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -641,7 +812,7 @@ export default function ChapterReaderPage() {
                 )}
                 {nextChapter ? (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                    onClick={() => navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl flex items-center justify-center gap-2 font-semibold transition-colors shadow-lg shadow-orange-500/25"
                   >
                     Next Chapter
@@ -660,24 +831,31 @@ export default function ChapterReaderPage() {
           </div>
         </div>
       ) : actualMode === 'double' ? (
-        // Double Page Mode - Clean view with no overlays
+        // Double Page Mode
         <div 
-          className="min-h-screen flex items-center justify-center py-4 px-2 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const isRightSide = x > rect.width / 2;
-            goPage(settings.direction === 'rtl' ? (isRightSide ? -1 : 1) : (isRightSide ? 1 : -1));
-          }}
+          className="min-h-screen flex items-center justify-center pt-14 pb-24 px-12"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
-          <div className="flex items-center justify-center gap-1" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+          {/* Left Navigation Button */}
+          <button
+            onClick={() => goPage(-1)}
+            disabled={currentPage === 0 && !prevChapter}
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          <div className="flex items-center justify-center gap-1" style={{ maxHeight: 'calc(100vh - 9rem)' }}>
             {pages[currentPage] && (
               <img
                 src={pages[currentPage].url}
                 alt={`Page ${currentPage + 1}`}
                 className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 2rem)', maxWidth: 'calc(50vw - 1rem)' }}
+                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
+                onError={() => handleImageError(pages[currentPage].url, currentPage)}
+                referrerPolicy="no-referrer"
               />
             )}
             {pages[currentPage + 1] && (
@@ -685,52 +863,74 @@ export default function ChapterReaderPage() {
                 src={pages[currentPage + 1].url}
                 alt={`Page ${currentPage + 2}`}
                 className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 2rem)', maxWidth: 'calc(50vw - 1rem)' }}
+                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
                 draggable={false}
+                onError={() => handleImageError(pages[currentPage + 1].url, currentPage + 1)}
+                referrerPolicy="no-referrer"
               />
             )}
           </div>
+
+          {/* Right Navigation Button */}
+          <button
+            onClick={() => goPage(1)}
+            disabled={currentPage >= pages.length - 1 && !nextChapter}
+            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
         </div>
       ) : (
-        // Single Page Mode - Clean view with no overlays
+        // Single Page Mode - Clean view with navigation buttons
         <div 
-          className="min-h-screen flex items-center justify-center py-4 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const isRightSide = x > rect.width / 2;
-            goPage(settings.direction === 'rtl' ? (isRightSide ? -1 : 1) : (isRightSide ? 1 : -1));
-          }}
+          className="min-h-screen flex items-center justify-center pt-14 pb-24"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
+          {/* Left Navigation Button */}
+          <button
+            onClick={() => goPage(-1)}
+            disabled={currentPage === 0 && !prevChapter}
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
           {pages[currentPage] && (
             <img
               src={pages[currentPage].url}
               alt={`Page ${currentPage + 1}`}
-              className="select-none max-w-full object-contain"
+              className="select-none object-contain"
               style={{ 
-                maxHeight: 'calc(100vh - 2rem)',
-                maxWidth: 'calc(100vw - 2rem)'
+                maxHeight: 'calc(100vh - 9rem)',
+                maxWidth: 'calc(100vw - 4rem)'
               }}
               draggable={false}
+              onError={() => handleImageError(pages[currentPage].url, currentPage)}
+              referrerPolicy="no-referrer"
             />
           )}
-          
+
+          {/* Right Navigation Button */}
+          <button
+            onClick={() => goPage(1)}
+            disabled={currentPage === pages.length - 1 && !nextChapter}
+            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
         </div>
       )}
 
-      {/* Page Navigation for Page Modes - Only shows on hover/tap */}
+      {/* Page Navigation for Page Modes - Always visible */}
       {actualMode !== 'scroll' && (
-        <div 
-          className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-300 ${
-            showUI ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-          }`}
-        >
+        <div className="fixed bottom-0 left-0 right-0 z-40">
           <div className="bg-black/90 backdrop-blur-sm border-t border-zinc-800/50 py-4 px-4">
             <div className="max-w-4xl mx-auto">
               {/* Mobile Chapter Nav */}
               <div className="flex md:hidden items-center justify-between mb-3">
                 <button
-                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip } })}
+                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
                   disabled={!prevChapter}
                   className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
                 >
@@ -738,7 +938,7 @@ export default function ChapterReaderPage() {
                 </button>
                 <span className="text-sm text-zinc-400">Ch. {currentChapter?.chapter}</span>
                 <button
-                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip } })}
+                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
                   disabled={!nextChapter}
                   className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
                 >
@@ -771,10 +971,48 @@ export default function ChapterReaderPage() {
                       style={{ width: `${((currentPage + 1) / pages.length) * 100}%` }}
                     />
                   </div>
-                  <div className="flex justify-between mt-2 text-xs text-zinc-500">
-                    <span>1</span>
-                    <span className="text-white font-medium">{currentPage + 1} / {pages.length}</span>
-                    <span>{pages.length}</span>
+                  <div className="flex justify-center mt-2 text-xs text-zinc-500">
+                    {showPageInput ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const pageNum = parseInt(pageInputValue, 10);
+                          if (pageNum >= 1 && pageNum <= pages.length) {
+                            goToPage(pageNum - 1);
+                          }
+                          setShowPageInput(false);
+                          setPageInputValue('');
+                        }}
+                        className="flex items-center gap-1"
+                      >
+                        <input
+                          ref={pageInputRef}
+                          type="number"
+                          min="1"
+                          max={pages.length}
+                          value={pageInputValue}
+                          onChange={(e) => setPageInputValue(e.target.value)}
+                          onBlur={() => {
+                            setShowPageInput(false);
+                            setPageInputValue('');
+                          }}
+                          className="w-12 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-center text-white text-xs focus:outline-none focus:border-orange-500"
+                          autoFocus
+                        />
+                        <span className="text-white">/ {pages.length}</span>
+                      </form>
+                    ) : (
+                      <span
+                        className="text-white font-medium cursor-pointer hover:text-orange-400 transition-colors"
+                        onClick={() => {
+                          setPageInputValue(String(currentPage + 1));
+                          setShowPageInput(true);
+                        }}
+                        title="Click to jump to page"
+                      >
+                        {currentPage + 1} / {pages.length}
+                      </span>
+                    )}
                   </div>
                 </div>
                 

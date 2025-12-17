@@ -1,124 +1,248 @@
 import BaseScraper from './base.js';
 
-// NHentai - Adult content
+// API base URL for proxy (set via environment variable in production)
+const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+
+// NHentai - Adult content - Using nhentai.xxx mirror (nhentai.net has Cloudflare)
 export class NHentaiScraper extends BaseScraper {
   constructor() {
-    super('NHentai', 'https://nhentai.net', true);
-    // Better headers to avoid 403
-    this.client.defaults.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    this.client.defaults.headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8';
-    this.client.defaults.headers['Accept-Language'] = 'en-US,en;q=0.9';
-    this.client.defaults.headers['Referer'] = 'https://nhentai.net/';
-    this.client.defaults.headers['sec-ch-ua'] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"';
-    this.client.defaults.headers['sec-ch-ua-mobile'] = '?0';
-    this.client.defaults.headers['sec-ch-ua-platform'] = '"Windows"';
-    this.client.defaults.headers['Sec-Fetch-Dest'] = 'document';
-    this.client.defaults.headers['Sec-Fetch-Mode'] = 'navigate';
-    this.client.defaults.headers['Sec-Fetch-Site'] = 'same-origin';
+    // Using nhentai.xxx mirror - nhentai.net API is blocked by Cloudflare
+    super('NHentai', 'https://nhentai.xxx', true);
+    this.imageServer = 'https://i5.nhentaimg.com';
   }
 
-  async search(query, page = 1) {
+  // Helper to create proxy URL - returns absolute URL for cross-origin access
+  proxyUrl(url) {
+    if (!url) return '';
+    const base = API_BASE || '';
+    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
+  }
+
+  async fetchHtml(url) {
     try {
-      const $ = await this.fetch(`${this.baseUrl}/search/?q=${encodeURIComponent(query)}&page=${page}`);
-      if (!$) return [];
-      return this.parseGalleryList($);
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.text();
+    } catch (e) {
+      console.error('[NHentai] Fetch error:', e.message);
+      return null;
+    }
+  }
+
+  parseGalleryList(html) {
+    const results = [];
+    // Match gallery_item containers for nhentai.xxx
+    const galleryRegex = /<div[^>]*class="gallery_item"[^>]*>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/gi;
+    const linkRegex = /<a[^>]*href="\/g\/(\d+)\/"/i;
+    const titleRegex = /title="([^"]*)"/i;
+    const imgRegex = /<img[^>]*data-src="([^"]*)"[^>]*>/i;
+    const captionRegex = /<div[^>]*class="caption"[^>]*>([\s\S]*?)<\/div>/i;
+    
+    let match;
+    while ((match = galleryRegex.exec(html)) !== null) {
+      const content = match[1];
+      const linkMatch = linkRegex.exec(content);
+      const titleMatch = titleRegex.exec(content);
+      const imgMatch = imgRegex.exec(content);
+      const captionMatch = captionRegex.exec(content);
+      
+      if (linkMatch) {
+        const id = linkMatch[1];
+        // Prefer title attribute, then caption text
+        let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
+        title = this.decodeHtml(title.trim());
+        const coverUrl = imgMatch ? imgMatch[1] : '';
+        
+        results.push(this.formatGallery({ id, title, coverUrl }));
+      }
+    }
+    return results;
+  }
+
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+    try {
+      // Build search query - nhentai.xxx supports tag search in query
+      let searchQuery = query || '';
+      
+      // Add language filter (english, japanese, chinese)
+      if (language && language !== 'all') {
+        searchQuery += ` language:${language}`;
+      }
+      
+      // Add tags to search query if provided
+      if (tags && tags.length > 0) {
+        searchQuery += ' ' + tags.join(' ');
+      }
+      
+      // Add excluded tags with minus prefix
+      if (excludeTags && excludeTags.length > 0) {
+        searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+      }
+      
+      searchQuery = searchQuery.trim();
+      
+      // If no query at all, return popular instead
+      if (!searchQuery) {
+        return this.getPopular(page, includeAdult, tags, excludeTags, language);
+      }
+      
+      // nhentai.xxx uses 'key' parameter, not 'q'
+      const url = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
+      const html = await this.fetchHtml(url);
+      if (!html) return [];
+      return this.parseGalleryList(html);
     } catch (e) {
       console.error('[NHentai] Search error:', e.message);
       return [];
     }
   }
 
-  async getPopular(page = 1) {
+  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      const $ = await this.fetch(`${this.baseUrl}/?page=${page}`);
-      if (!$) return [];
-      return this.parseGalleryList($);
+      // Defensive: if tags is not an array (e.g., called with sort string), reset it
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+      if (!Array.isArray(excludeTags)) {
+        excludeTags = [];
+      }
+      
+      // If tags or language provided, use search with popular sort
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        let searchQuery = tags.join(' ');
+        if (language && language !== 'all') {
+          searchQuery += ` language:${language}`;
+        }
+        if (excludeTags.length > 0) {
+          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+        }
+        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&sort=popular&page=${page}`;
+        const html = await this.fetchHtml(url);
+        if (!html) return [];
+        return this.parseGalleryList(html);
+      }
+      
+      const url = `${this.baseUrl}/?sort=popular&page=${page}`;
+      const html = await this.fetchHtml(url);
+      if (!html) return [];
+      return this.parseGalleryList(html);
     } catch (e) {
       console.error('[NHentai] Popular error:', e.message);
       return [];
     }
   }
 
-  async getLatest(page = 1) {
-    return this.getPopular(page);
+  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+    try {
+      // Defensive: if tags is not an array (e.g., called with sort string), reset it
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+      if (!Array.isArray(excludeTags)) {
+        excludeTags = [];
+      }
+      
+      // If tags or language provided, use search
+      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
+        let searchQuery = tags.join(' ');
+        if (language && language !== 'all') {
+          searchQuery += ` language:${language}`;
+        }
+        if (excludeTags.length > 0) {
+          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
+        }
+        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&page=${page}`;
+        const html = await this.fetchHtml(url);
+        if (!html) return [];
+        return this.parseGalleryList(html);
+      }
+      
+      const url = page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl;
+      const html = await this.fetchHtml(url);
+      if (!html) return [];
+      return this.parseGalleryList(html);
+    } catch (e) {
+      console.error('[NHentai] Latest error:', e.message);
+      return [];
+    }
   }
 
-  parseGalleryList($) {
-    const results = [];
-    
-    $('.gallery').each((_, el) => {
-      const $el = $(el);
-      const link = $el.find('a').first().attr('href') || '';
-      const title = $el.find('.caption').text().trim();
-      const cover = $el.find('img').attr('data-src') || $el.find('img').attr('src');
-      
-      const idMatch = link.match(/\/g\/(\d+)/);
-      const id = idMatch ? idMatch[1] : '';
-      
-      if (id && title) {
-        const coverUrl = cover?.replace('t.nhentai', 'i.nhentai').replace('t.jpg', '.jpg');
-        results.push({
-          id: `nhentai:${id}`,
-          sourceId: 'nhentai',
-          slug: id,
-          title,
-          cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
-          isAdult: true,
-        });
-      }
-    });
+  formatGallery({ id, title, coverUrl }) {
+    return {
+      id: `nhentai:${id}`,
+      sourceId: 'nhentai',
+      slug: String(id),
+      title,
+      cover: this.proxyUrl(coverUrl),
+      author: 'Unknown',
+      tags: [],
+      pages: 0,
+      isAdult: true,
+      contentType: 'doujinshi',
+    };
+  }
 
-    return results;
+  decodeHtml(html) {
+    return html
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+  }
+
+  getExtension(type) {
+    const types = { j: 'jpg', p: 'png', g: 'gif', w: 'webp' };
+    return types[type] || 'jpg';
   }
 
   async getMangaDetails(id) {
     const galleryId = id.replace('nhentai:', '');
-    const $ = await this.fetch(`${this.baseUrl}/g/${galleryId}/`);
-    if (!$) return null;
-
+    
     try {
-      const title = $('#info h1').text().trim() || $('#info h2').text().trim();
-      const cover = $('#cover img').attr('data-src') || $('#cover img').attr('src');
+      // Use HTML scraping for nhentai.xxx
+      const url = `${this.baseUrl}/g/${galleryId}/`;
+      const html = await this.fetchHtml(url);
+      if (!html) return null;
       
+      // Parse title from <h1>
+      const titleMatch = /<h1>([^<]*)<\/h1>/i.exec(html);
+      const title = titleMatch ? this.decodeHtml(titleMatch[1].trim()) : `Gallery ${galleryId}`;
+      
+      // Parse pages count
+      const pagesMatch = /pages">(\d+)<\/span>/i.exec(html);
+      const pageCount = pagesMatch ? parseInt(pagesMatch[1]) : 0;
+      
+      // Parse cover image
+      const coverMatch = /<img[^>]*class="[^"]*lazyload[^"]*"[^>]*data-src="([^"]*)"[^>]*>/i.exec(html);
+      const cover = coverMatch ? coverMatch[1] : '';
+      
+      // Extract tags
       const tags = [];
-      const artists = [];
-      const parodies = [];
-      const characters = [];
-      const groups = [];
-      const languages = [];
-      const categories = [];
+      const tagRegex = /<a[^>]*class='tag_btn[^']*'[^>]*href='\/tag\/([^']*)\/'[^>]*>[\s\S]*?<span[^>]*class='tag_name'[^>]*>([^<]*)<\/span>/gi;
+      let tagMatch;
+      while ((tagMatch = tagRegex.exec(html)) !== null) {
+        tags.push(tagMatch[2].trim());
+      }
       
-      $('.tag-container').each((_, container) => {
-        const $c = $(container);
-        const label = $c.text().split(':')[0].toLowerCase().trim();
-        
-        $c.find('.tag .name').each((_, tag) => {
-          const name = $(tag).text().trim();
-          if (label.includes('tag')) tags.push(name);
-          if (label.includes('artist')) artists.push(name);
-          if (label.includes('parody')) parodies.push(name);
-          if (label.includes('character')) characters.push(name);
-          if (label.includes('group')) groups.push(name);
-          if (label.includes('language')) languages.push(name);
-          if (label.includes('category')) categories.push(name);
-        });
-      });
-
-      const pageCount = parseInt($('#info .tag-container:contains("pages") .name').text()) || 0;
+      // Extract artist
+      const artistMatch = /<a[^>]*href='\/artist\/[^']*'[^>]*>[\s\S]*?<span[^>]*class='tag_name'[^>]*>([^<]*)<\/span>/i.exec(html);
+      const artist = artistMatch ? artistMatch[1].trim() : 'Unknown';
 
       return {
         id,
         sourceId: 'nhentai',
         slug: galleryId,
         title,
-        cover: cover ? `/api/proxy/image?url=${encodeURIComponent(cover)}` : null,
+        cover: this.proxyUrl(cover),
         tags,
-        artists,
-        parodies,
-        characters,
-        groups,
-        languages,
-        categories,
+        artists: artist !== 'Unknown' ? [artist] : [],
         pageCount,
         isAdult: true,
         isLongStrip: false,
@@ -143,67 +267,81 @@ export class NHentaiScraper extends BaseScraper {
 
   async getChapterPages(chapterId, mangaId) {
     const galleryId = mangaId.replace('nhentai:', '');
-    const $ = await this.fetch(`${this.baseUrl}/g/${galleryId}/`);
-    if (!$) return [];
-
-    const pages = [];
     
-    // Get page count and media ID
-    const thumbs = $('#thumbnail-container .thumb-container img');
-    
-    thumbs.each((i, img) => {
-      let src = $(img).attr('data-src') || $(img).attr('src') || '';
-      // Convert thumbnail URL to full image URL
-      // t.nhentai.net/galleries/XXXXX/1t.jpg -> i.nhentai.net/galleries/XXXXX/1.jpg
-      src = src.replace('t.nhentai', 'i.nhentai').replace(/(\d+)t\./, '$1.');
+    try {
+      const url = `${this.baseUrl}/g/${galleryId}/`;
+      const html = await this.fetchHtml(url);
+      if (!html) return [];
       
-      if (src) {
-        // Use proxy to bypass hotlink protection
-        pages.push({ 
-          page: i + 1, 
-          url: `/api/proxy/image?url=${encodeURIComponent(src)}`,
-          originalUrl: src
-        });
+      const pages = [];
+      
+      // nhentai.xxx embeds page data as JSON: var g_th = $.parseJSON('{"fl":{"1":"j,w,h",...},...}');
+      // "fl" = full images, format is "ext_code,width,height" where j=jpg, p=png, g=gif, w=webp
+      const jsonMatch = /var g_th = \$\.parseJSON\('(\{[^']+\})'\);/i.exec(html);
+      
+      if (jsonMatch) {
+        try {
+          const data = JSON.parse(jsonMatch[1]);
+          const fullImages = data.fl || {};
+          
+          // Get the image server from a thumbnail on the page
+          const serverMatch = /https:\/\/(i\d+\.nhentaimg\.com)\/(\d+)\/([^/]+)\//i.exec(html);
+          const server = serverMatch ? serverMatch[1] : 'i5.nhentaimg.com';
+          const prefix = serverMatch ? serverMatch[2] : '000';
+          const hash = serverMatch ? serverMatch[3] : '';
+          
+          const extMap = { j: 'jpg', p: 'png', g: 'gif', w: 'webp' };
+          
+          for (const [pageNum, info] of Object.entries(fullImages)) {
+            const [extCode] = info.split(',');
+            const ext = extMap[extCode] || 'jpg';
+            const fullUrl = `https://${server}/${prefix}/${hash}/${pageNum}.${ext}`;
+            
+            pages.push({
+              page: parseInt(pageNum),
+              url: this.proxyUrl(fullUrl),
+              originalUrl: fullUrl,
+            });
+          }
+        } catch (parseErr) {
+          console.error('[NHentai] JSON parse error:', parseErr.message);
+        }
       }
-    });
+      
+      // Fallback to thumbnail scraping if JSON parsing failed
+      if (pages.length === 0) {
+        const thumbRegex = /<a[^>]*href="\/g\/\d+\/(\d+)\/"[^>]*><img[^>]*data-src="([^"]*)"[^>]*>/gi;
+        let match;
+        
+        while ((match = thumbRegex.exec(html)) !== null) {
+          const pageNum = parseInt(match[1]);
+          const thumbUrl = match[2];
+          // Keep original extension from thumbnail
+          const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.');
+          
+          pages.push({ 
+            page: pageNum, 
+            url: this.proxyUrl(fullUrl),
+            originalUrl: fullUrl,
+          });
+        }
+      }
 
-    return pages;
+      return pages.sort((a, b) => a.page - b.page);
+    } catch (e) {
+      console.error('[NHentai] Pages error:', e.message);
+      return [];
+    }
   }
 
   async getTags() {
-    try {
-      // Scrape popular tags from NHentai homepage
-      const $ = await this.fetch(this.baseUrl);
-      if (!$) throw new Error('Failed to fetch homepage');
-      
-      const tags = [];
-      // Get tags from popular tags section
-      $('.tag-cloud a, .tag .name').each((_, el) => {
-        const tag = $(el).text().trim();
-        if (tag && !tag.includes('(') && tag.length > 2) {
-          tags.push(tag.toLowerCase());
-        }
-      });
-      
-      // Remove duplicates and sort
-      const uniqueTags = [...new Set(tags)].sort();
-      
-      if (uniqueTags.length > 0) {
-        console.log(`[NHentai] Loaded ${uniqueTags.length} official tags`);
-        return uniqueTags;
-      }
-      
-      throw new Error('No tags found');
-    } catch (e) {
-      console.error('[NHentai] Tags error:', e.message);
-      // Fallback to common tags
-      return [
-        'ahegao', 'anal', 'big breasts', 'blowjob', 'bondage', 'cheating',
-        'femdom', 'futanari', 'group', 'harem', 'incest', 'lolicon',
-        'milf', 'mind break', 'monster girl', 'netorare', 'paizuri',
-        'rape', 'shotacon', 'stockings', 'tentacles', 'vanilla', 'yuri'
-      ];
-    }
+    // Return common tags since scraping tags from nhentai.xxx is complex
+    return [
+      'ahegao', 'anal', 'big breasts', 'blowjob', 'bondage', 'cheating',
+      'femdom', 'futanari', 'group', 'harem', 'incest', 'lolicon',
+      'milf', 'mind break', 'monster girl', 'netorare', 'paizuri',
+      'rape', 'shotacon', 'stockings', 'tentacles', 'vanilla', 'yuri'
+    ];
   }
 }
 

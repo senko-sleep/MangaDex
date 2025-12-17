@@ -187,9 +187,22 @@
   outline-offset: 2px;
 }
 
-/* Smooth scroll */
+/* Smooth scroll and zoom-friendly layout */
 html {
   scroll-behavior: smooth;
+  /* Use rem-based sizing for zoom compatibility */
+  font-size: 100%;
+}
+
+/* Ensure content scales properly with browser zoom */
+body {
+  min-width: 320px;
+  overflow-x: auto;
+}
+
+/* Make containers responsive to zoom */
+.max-w-7xl {
+  max-width: min(80rem, 100vw - 2rem);
 }
 
 /* Reader-specific styles */

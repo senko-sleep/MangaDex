@@ -1,11 +1,21 @@
 import BaseScraper from './base.js';
 
+// API base URL for proxy (set via environment variable in production)
+// Must be set to the full URL of the API server (e.g., https://mangadex-i6sv.onrender.com)
+const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+
 // MangaDex - Official API, very reliable
 export class MangaDexScraper extends BaseScraper {
   constructor() {
     super('MangaDex', 'https://api.mangadex.org', false);
     this.tagCache = null;
     this.tagCacheTime = 0;
+  }
+  
+  // Helper to create proxy URL - returns absolute URL for cross-origin access
+  proxyUrl(url) {
+    const base = API_BASE || 'https://mangadex-i6sv.onrender.com';
+    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
   // Get tag IDs from tag names (for API filtering)
@@ -33,15 +43,26 @@ export class MangaDexScraper extends BaseScraper {
     }).filter(Boolean);
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = []) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false, language = null, sort = 'popular') {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50'); // Max allowed by MangaDex API
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
-      params.append('order[followedCount]', 'desc');
       params.append('hasAvailableChapters', 'true');
+      
+      // Map sort option to MangaDex API order parameters
+      if (sort === 'latest') {
+        params.append('order[createdAt]', 'desc');
+      } else if (sort === 'updated') {
+        params.append('order[latestUploadedChapter]', 'desc');
+      } else if (sort === 'rating') {
+        params.append('order[rating]', 'desc');
+      } else {
+        // Default: popular by followers
+        params.append('order[followedCount]', 'desc');
+      }
       
       // Content ratings
       params.append('contentRating[]', 'safe');
@@ -52,6 +73,19 @@ export class MangaDexScraper extends BaseScraper {
       }
       
       if (query) params.set('title', query);
+      
+      // Add status filter - MangaDex uses status[] parameter
+      if (status) {
+        const statusMap = {
+          'ongoing': 'ongoing',
+          'completed': 'completed',
+          'hiatus': 'hiatus',
+          'cancelled': 'cancelled',
+        };
+        if (statusMap[status]) {
+          params.append('status[]', statusMap[status]);
+        }
+      }
       
       // Add tag filtering using MangaDex API
       if (tags.length > 0) {
@@ -72,16 +106,16 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = []) {
-    return this.search('', page, includeAdult, tags, excludeTags);
+  async getPopular(page = 1, includeAdult = true, sort = 'popular') {
+    return this.search('', page, includeAdult, [], [], null, false, null, sort);
   }
 
   async getLatest(page = 1, includeAdult = true) {
     try {
-      const offset = (page - 1) * 24;
+      const offset = (page - 1) * 50;
       // Build params with multiple content ratings
       const params = new URLSearchParams();
-      params.append('limit', '24');
+      params.append('limit', '50'); // Max allowed
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[latestUploadedChapter]', 'desc');
@@ -101,6 +135,56 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
+  async getNewlyAdded(page = 1, includeAdult = true) {
+    try {
+      const offset = (page - 1) * 50;
+      const params = new URLSearchParams();
+      params.append('limit', '50');
+      params.append('offset', String(offset));
+      params.append('includes[]', 'cover_art');
+      params.append('order[createdAt]', 'desc');
+      params.append('hasAvailableChapters', 'true');
+      
+      params.append('contentRating[]', 'safe');
+      params.append('contentRating[]', 'suggestive');
+      if (includeAdult) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      }
+
+      const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
+      return (res.data?.data || []).map(m => this.formatManga(m));
+    } catch (e) {
+      console.error('[MangaDex] NewlyAdded error:', e.message);
+      return [];
+    }
+  }
+
+  async getTopRated(page = 1, includeAdult = true) {
+    try {
+      const offset = (page - 1) * 50;
+      const params = new URLSearchParams();
+      params.append('limit', '50');
+      params.append('offset', String(offset));
+      params.append('includes[]', 'cover_art');
+      params.append('order[rating]', 'desc');
+      params.append('hasAvailableChapters', 'true');
+      
+      params.append('contentRating[]', 'safe');
+      params.append('contentRating[]', 'suggestive');
+      if (includeAdult) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      }
+
+      const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
+      return (res.data?.data || []).map(m => this.formatManga(m));
+    } catch (e) {
+      console.error('[MangaDex] TopRated error:', e.message);
+      return [];
+    }
+  }
+
   formatManga(m) {
     const cover = m.relationships?.find(r => r.type === 'cover_art')?.attributes?.fileName;
     const tags = m.attributes?.tags || [];
@@ -108,15 +192,15 @@ export class MangaDexScraper extends BaseScraper {
     const contentRating = m.attributes?.contentRating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
     
-    // Use proxy for cover images to bypass hotlink protection
-    const coverUrl = cover ? `https://mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
+    // Proxy MangaDex cover URL for cross-origin access
+    const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg`) : null;
     
     return {
       id: `mangadex:${m.id}`,
       sourceId: 'mangadex',
       slug: m.id,
       title: m.attributes?.title?.en || m.attributes?.title?.['ja-ro'] || Object.values(m.attributes?.title || {})[0] || 'Unknown',
-      cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+      cover: coverUrl,
       status: m.attributes?.status,
       contentRating,
       isAdult,
@@ -151,8 +235,8 @@ export class MangaDexScraper extends BaseScraper {
       const altTitles = m.attributes?.altTitles || [];
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
       
-      // Proxy cover image
-      const coverUrl = cover ? `https://mangadex.org/covers/${mangaId}/${cover}` : null;
+      // Proxy MangaDex cover URL for cross-origin access
+      const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${mangaId}/${cover}`) : null;
 
       return {
         id,
@@ -161,7 +245,7 @@ export class MangaDexScraper extends BaseScraper {
         title,
         altTitles: altTitles.map(t => Object.values(t)[0]).filter(Boolean),
         description,
-        cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+        cover: coverUrl,
         status: m.attributes?.status,
         contentRating,
         isAdult,
@@ -325,7 +409,7 @@ export class MangaDexScraper extends BaseScraper {
         const originalUrl = `${baseUrl}/data/${hash}/${file}`;
         return {
           page: i + 1,
-          url: `/api/proxy/image?url=${encodeURIComponent(originalUrl)}`,
+          url: this.proxyUrl(originalUrl),
           originalUrl,
           quality: 'high',
           isExternal: false,
@@ -337,7 +421,7 @@ export class MangaDexScraper extends BaseScraper {
         const originalUrl = `${baseUrl}/data-saver/${hash}/${file}`;
         return {
           page: i + 1,
-          url: `/api/proxy/image?url=${encodeURIComponent(originalUrl)}`,
+          url: this.proxyUrl(originalUrl),
           originalUrl,
           quality: 'low',
         };

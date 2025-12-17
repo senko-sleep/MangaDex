@@ -1,16 +1,62 @@
 import NodeCache from 'node-cache';
 import MangaDexScraper from './mangadex.js';
+import { KitsuScraper } from './kitsu.js';
+import NHentaiScraper from './nhentai.js';
+import { EHentaiScraper } from './ehentai.js';
+import { IMHentaiScraper } from './imhentai.js';
+import { HitomiScraper } from './hitomi.js';
+import { BatoScraper } from './bato.js';
 
-// Cache results for 5 minutes
-const cache = new NodeCache({ stdTTL: 300 });
+// Fast cache - 5 min for results, check every 60s for cleanup
+const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
-// Initialize scrapers - only MangaDex is reliable
-const scrapers = {
-  mangadex: new MangaDexScraper(),
+// Request timeout - fail fast
+const REQUEST_TIMEOUT = 8000;
+// Hitomi needs more time because it uses Playwright
+const HITOMI_TIMEOUT = 45000;
+
+// Wrap scraper call with timeout
+const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Timeout')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 };
 
-// Source metadata
+// Get appropriate timeout for source
+const getTimeoutForSource = (sourceId) => {
+  if (sourceId === 'hitomi') return HITOMI_TIMEOUT;
+  return REQUEST_TIMEOUT;
+};
+
+// Deduplicate results by ID to prevent React key warnings
+const dedupeResults = (results) => {
+  const seen = new Set();
+  return results.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+// Initialize scrapers - only working ones
+const scrapers = {
+  // Mainstream manga sources
+  mangadex: new MangaDexScraper(),
+  kitsu: new KitsuScraper(),
+  // mangaupdates: new MangaUpdatesScraper(), // Removed - slow
+  // Adult content sources (using direct APIs)
+  nhentai: new NHentaiScraper(),
+  ehentai: new EHentaiScraper(),
+  imhentai: new IMHentaiScraper(),
+  hitomi: new HitomiScraper(),
+  bato: new BatoScraper(),
+};
+
+// Source metadata with content types and supported filters
 export const sources = {
+  // Mainstream manga sources
   mangadex: {
     id: 'mangadex',
     name: 'MangaDex',
@@ -18,17 +64,133 @@ export const sources = {
     isAdult: false,
     enabled: true,
     description: 'Official API, reliable',
+    contentTypes: ['manga', 'manhwa', 'manhua', 'oneshot'],
+    filters: {
+      tags: true,
+      status: true,
+      sort: ['popular', 'latest', 'updated', 'rating'],
+    },
+  },
+  kitsu: {
+    id: 'kitsu',
+    name: 'Kitsu',
+    icon: '🦊',
+    isAdult: false,
+    enabled: true,
+    description: 'Anime/Manga database',
+    contentTypes: ['manga', 'manhwa', 'manhua'],
+    filters: {
+      tags: true,
+      status: true,
+      sort: ['popular', 'latest', 'rating'],
+    },
+  },
+  // mangaupdates removed - slow API
+  // Adult content sources
+  nhentai: {
+    id: 'nhentai',
+    name: 'nhentai',
+    icon: '🔞',
+    isAdult: true,
+    enabled: true,
+    description: 'Doujinshi library',
+    contentTypes: ['doujinshi', 'manga'],
+    filters: {
+      tags: true,
+      status: false,
+      language: true,  // Supports language filter (english, japanese, chinese)
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular', 'latest'],
+    },
+  },
+  ehentai: {
+    id: 'ehentai',
+    name: 'E-Hentai',
+    icon: '🐼',
+    isAdult: true,
+    enabled: true,
+    description: 'Largest doujinshi archive',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset', 'cosplay'],
+    filters: {
+      tags: true,
+      status: false,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular'],
+    },
+  },
+  imhentai: {
+    id: 'imhentai',
+    name: 'IMHentai',
+    icon: '🎨',
+    isAdult: true,
+    enabled: true,
+    description: 'Large adult content library',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset'],
+    filters: {
+      tags: true,
+      status: false,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'chinese'],
+      sort: ['popular', 'latest'],
+    },
+  },
+  hitomi: {
+    id: 'hitomi',
+    name: 'Hitomi.la',
+    icon: '💗',
+    isAdult: true,
+    enabled: true,
+    description: 'Large doujinshi archive',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg'],
+    filters: {
+      tags: true,
+      status: false,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'chinese', 'korean'],
+      sort: ['popular', 'latest'],
+    },
+  },
+  bato: {
+    id: 'bato',
+    name: 'Bato.to',
+    icon: '📖',
+    isAdult: false,
+    enabled: true,
+    description: 'Large manga library with multiple languages',
+    contentTypes: ['manga', 'manhwa', 'manhua', 'webtoon'],
+    filters: {
+      tags: true,
+      status: true,
+      language: true,
+      languages: ['all', 'english', 'japanese', 'korean', 'chinese'],
+      sort: ['popular', 'latest', 'updated', 'rating'],
+    },
   },
 };
 
 // Get all available sources
-export function getSources(includeAdult = false) {
-  return Object.values(sources).filter(s => includeAdult || !s.isAdult);
+// includeAdult: show adult sources alongside SFW
+// adultOnly: show ONLY adult sources (for 18+ mode)
+// isAdult: true = NSFW only, false = SFW only, null = show in both modes
+export function getSources(includeAdult = false, adultOnly = false) {
+  return Object.values(sources).filter(s => {
+    if (s.isAdult === null) return true;  // Show in both modes
+    if (adultOnly) return s.isAdult;       // Only show adult sources
+    if (includeAdult) return true;         // Show all sources
+    return !s.isAdult;                     // Only show SFW sources
+  });
 }
 
 // Get enabled sources
-export function getEnabledSources(includeAdult = false) {
-  return Object.values(sources).filter(s => s.enabled && (includeAdult || !s.isAdult));
+export function getEnabledSources(includeAdult = false, adultOnly = false) {
+  return Object.values(sources).filter(s => {
+    if (!s.enabled) return false;
+    if (s.isAdult === null) return true;  // Show in both modes
+    if (adultOnly) return s.isAdult;
+    if (includeAdult) return true;
+    return !s.isAdult;
+  });
 }
 
 // Toggle source
@@ -40,85 +202,201 @@ export function toggleSource(sourceId, enabled) {
   return false;
 }
 
-// Search across sources
+// Parse smart search query for tags, artists, etc.
+// Supports: artist:name, tag:name, parody:name, group:name, language:lang, -tag:name (exclude)
+const parseSmartQuery = (query) => {
+  const result = {
+    cleanQuery: '',
+    artist: null,
+    group: null,
+    parody: null,
+    language: null,
+    tags: [],
+    excludeTags: [],
+  };
+  
+  if (!query) return result;
+  
+  // Match patterns like artist:name, tag:name, -tag:name, etc.
+  // Supports quoted values: artist:"name with spaces"
+  const patterns = [
+    { regex: /artist:(?:"([^"]+)"|(\S+))/gi, field: 'artist' },
+    { regex: /circle:(?:"([^"]+)"|(\S+))/gi, field: 'group' },
+    { regex: /group:(?:"([^"]+)"|(\S+))/gi, field: 'group' },
+    { regex: /parody:(?:"([^"]+)"|(\S+))/gi, field: 'parody' },
+    { regex: /series:(?:"([^"]+)"|(\S+))/gi, field: 'parody' },
+    { regex: /language:(?:"([^"]+)"|(\S+))/gi, field: 'language' },
+    { regex: /lang:(?:"([^"]+)"|(\S+))/gi, field: 'language' },
+    { regex: /-tag:(?:"([^"]+)"|(\S+))/gi, field: 'excludeTag' },
+    { regex: /tag:(?:"([^"]+)"|(\S+))/gi, field: 'tag' },
+    { regex: /character:(?:"([^"]+)"|(\S+))/gi, field: 'tag' },
+    { regex: /female:(?:"([^"]+)"|(\S+))/gi, field: 'tag', prefix: 'female:' },
+    { regex: /male:(?:"([^"]+)"|(\S+))/gi, field: 'tag', prefix: 'male:' },
+  ];
+  
+  let cleanQuery = query;
+  
+  for (const { regex, field, prefix = '' } of patterns) {
+    let match;
+    while ((match = regex.exec(query)) !== null) {
+      const value = (match[1] || match[2]).trim();
+      cleanQuery = cleanQuery.replace(match[0], '').trim();
+      
+      if (field === 'tag') {
+        result.tags.push(prefix + value);
+      } else if (field === 'excludeTag') {
+        result.excludeTags.push(value);
+      } else if (field === 'artist' || field === 'group' || field === 'parody' || field === 'language') {
+        result[field] = value;
+      }
+    }
+  }
+  
+  // Clean up extra spaces
+  result.cleanQuery = cleanQuery.replace(/\s+/g, ' ').trim();
+  
+  return result;
+};
+
+// Search across sources - optimized with timeouts
 export async function search(query, options = {}) {
   const { 
     sourceIds = null, 
     includeAdult = false, 
+    adultOnly = false,
     page = 1,
     tags = [],
     excludeTags = [],
+    status = null,
+    sort = 'popular',
   } = options;
 
-  const cacheKey = `search:${query}:${JSON.stringify(options)}`;
+  // Parse smart query for artist, tags, etc.
+  const parsed = parseSmartQuery(query);
+  const effectiveTags = [...tags, ...parsed.tags];
+  const effectiveExcludeTags = [...excludeTags, ...parsed.excludeTags];
+  
+  // Add artist/group/parody as tags for sources that support them
+  if (parsed.artist) effectiveTags.push(`artist:${parsed.artist}`);
+  if (parsed.group) effectiveTags.push(`group:${parsed.group}`);
+  if (parsed.parody) effectiveTags.push(`parody:${parsed.parody}`);
+
+  const cacheKey = `search:${query}:${page}:${sort}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const targetSources = sourceIds 
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
+  // Run all scrapers in parallel with individual timeouts
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      if (!scraper) return [];
       try {
-        const scraper = scrapers[sourceId];
-        // Pass tags directly to scrapers that support native filtering (like MangaDex)
-        const data = await scraper.search(query, page, includeAdult, tags, excludeTags);
-        return data.map(m => ({ ...m, sourceId }));
+        // Pass parsed query and tags to scraper
+        const data = await withTimeout(
+          scraper.search(
+            parsed.cleanQuery, 
+            page, 
+            includeAdult || adultOnly, 
+            effectiveTags, 
+            effectiveExcludeTags, 
+            status, 
+            adultOnly,
+            parsed.language, // Pass language for sources that support it
+            sort // Pass sort option to scraper
+          ),
+          getTimeoutForSource(sourceId)
+        );
+        return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
-        console.error(`[${sourceId}] Search error:`, e.message);
+        // Silent fail - don't log timeouts
         return [];
       }
     })
   );
 
-  const allResults = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value);
+  const allResults = dedupeResults(
+    results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  );
 
   cache.set(cacheKey, allResults);
   return allResults;
 }
 
-// Get popular manga
+// Get popular manga - optimized
 export async function getPopular(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1, tags = [], excludeTags = [] } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, sort = 'popular' } = options;
 
-  const cacheKey = `popular:${JSON.stringify(options)}`;
+  const cacheKey = `popular:${page}:${sort}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const targetSources = sourceIds 
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      if (!scraper) return [];
       try {
-        const scraper = scrapers[sourceId];
-        // Pass tags directly to scrapers that support native filtering
-        const data = await scraper.getPopular(page, includeAdult, tags, excludeTags);
-        return data.map(m => ({ ...m, sourceId }));
+        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly, sort), getTimeoutForSource(sourceId));
+        return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
-        console.error(`[${sourceId}] Popular error:`, e.message);
         return [];
       }
     })
   );
 
-  const allResults = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value);
+  const allResults = dedupeResults(
+    results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  );
 
   cache.set(cacheKey, allResults);
   return allResults;
 }
 
-// Get latest updates
+// Get latest updates - optimized
 export async function getLatest(options = {}) {
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1 } = options;
+
+  const cacheKey = `latest:${page}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const targetSources = sourceIds 
+    ? sourceIds.filter(id => scrapers[id])
+    : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
+
+  const results = await Promise.allSettled(
+    targetSources.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      if (!scraper) return [];
+      try {
+        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly), getTimeoutForSource(sourceId));
+        return (data || []).map(m => ({ ...m, sourceId }));
+      } catch (e) {
+        return [];
+      }
+    })
+  );
+
+  const allResults = dedupeResults(
+    results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  );
+
+  cache.set(cacheKey, allResults);
+  return allResults;
+}
+
+// Get newly added manga
+export async function getNewlyAdded(options = {}) {
   const { sourceIds = null, includeAdult = false, page = 1 } = options;
 
-  const cacheKey = `latest:${JSON.stringify(options)}`;
+  const cacheKey = `newlyAdded:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -130,19 +408,51 @@ export async function getLatest(options = {}) {
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        // Pass includeAdult to scrapers that support it
-        const data = await scraper.getLatest(page, includeAdult);
+        const data = await scraper.getNewlyAdded(page, includeAdult);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
-        console.error(`[${sourceId}] Latest error:`, e.message);
+        console.error(`[${sourceId}] NewlyAdded error:`, e.message);
         return [];
       }
     })
   );
 
-  const allResults = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value);
+  const allResults = dedupeResults(
+    results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  );
+
+  cache.set(cacheKey, allResults);
+  return allResults;
+}
+
+// Get top rated manga
+export async function getTopRated(options = {}) {
+  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+
+  const cacheKey = `topRated:${JSON.stringify(options)}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const targetSources = sourceIds 
+    ? sourceIds.filter(id => scrapers[id])
+    : getEnabledSources(includeAdult).map(s => s.id);
+
+  const results = await Promise.allSettled(
+    targetSources.map(async (sourceId) => {
+      try {
+        const scraper = scrapers[sourceId];
+        const data = await scraper.getTopRated(page, includeAdult);
+        return data.map(m => ({ ...m, sourceId }));
+      } catch (e) {
+        console.error(`[${sourceId}] TopRated error:`, e.message);
+        return [];
+      }
+    })
+  );
+
+  const allResults = dedupeResults(
+    results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  );
 
   cache.set(cacheKey, allResults);
   return allResults;
@@ -205,40 +515,56 @@ export async function getChapterPages(chapterId, mangaId) {
   return pages;
 }
 
-// Get all tags from all sources (cached for 1 hour)
-export async function getAllTags(includeAdult = false) {
-  const cacheKey = `tags:${includeAdult}`;
+// Get tags for specific sources (cached for 1 hour)
+export async function getTagsForSources(sourceIds = null, includeAdult = false) {
+  // If no specific sources, get all enabled sources
+  const targetSourceIds = sourceIds && sourceIds.length > 0 
+    ? sourceIds 
+    : getEnabledSources(includeAdult).map(s => s.id);
+  
+  const cacheKey = `tags:${targetSourceIds.sort().join(',')}:${includeAdult}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const allTags = new Set();
-  const adultTags = new Set();
+  const tagsBySource = {};
+  const allTagsSet = new Set();
   
-  for (const [sourceId, scraper] of Object.entries(scrapers)) {
+  for (const sourceId of targetSourceIds) {
+    const scraper = scrapers[sourceId];
+    const source = sources[sourceId];
+    
+    if (!scraper || !source) continue;
+    if (!includeAdult && source.isAdult) continue;
+    
     try {
-      const source = sources[sourceId];
       const tags = await scraper.getTags();
-      
       if (Array.isArray(tags)) {
-        if (source.isAdult) {
-          tags.forEach(t => adultTags.add(t));
-        } else {
-          tags.forEach(t => allTags.add(t));
-        }
+        tagsBySource[sourceId] = tags.sort();
+        tags.forEach(t => allTagsSet.add(t));
       }
     } catch (e) {
       console.error(`[${sourceId}] Tags error:`, e.message);
+      tagsBySource[sourceId] = [];
     }
   }
 
   const result = {
-    tags: Array.from(allTags).sort(),
-    adultTags: includeAdult ? Array.from(adultTags).sort() : [],
+    // All unique tags across selected sources
+    tags: Array.from(allTagsSet).sort(),
+    // Tags organized by source
+    bySource: tagsBySource,
+    // Total count for UI decisions
+    totalCount: allTagsSet.size,
   };
 
   // Cache for longer (1 hour) since tags don't change often
   cache.set(cacheKey, result, 3600);
   return result;
+}
+
+// Legacy function for backward compatibility
+export async function getAllTags(includeAdult = false) {
+  return getTagsForSources(null, includeAdult);
 }
 
 export default {
@@ -249,8 +575,11 @@ export default {
   search,
   getPopular,
   getLatest,
+  getNewlyAdded,
+  getTopRated,
   getMangaDetails,
   getChapters,
   getChapterPages,
   getAllTags,
+  getTagsForSources,
 };

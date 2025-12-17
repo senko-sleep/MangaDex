@@ -2,32 +2,70 @@
 
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getAnilistCover, PLACEHOLDER_COVER } from '@/lib/anilist';
 
 export default function MangaCard({ manga }) {
   const [imgError, setImgError] = useState(false);
+  const [coverUrl, setCoverUrl] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    if (!manga) return;
+    
+    setImgError(false);
+    setIsLoading(true);
+    
+    // First try existing cover URL
+    const existingCover = manga.coverUrl || manga.thumbnail || manga.cover;
+    if (existingCover) {
+      setCoverUrl(existingCover);
+      setIsLoading(false);
+      return;
+    }
+    
+    // Fall back to Anilist API
+    if (manga.title) {
+      getAnilistCover(manga.title).then(result => {
+        setCoverUrl(result?.coverUrl || PLACEHOLDER_COVER);
+        setIsLoading(false);
+      }).catch(() => {
+        setCoverUrl(PLACEHOLDER_COVER);
+        setIsLoading(false);
+      });
+    } else {
+      setCoverUrl(PLACEHOLDER_COVER);
+      setIsLoading(false);
+    }
+  }, [manga?.id, manga?.title, manga?.coverUrl]);
   
   if (!manga) return null;
   
-  const cover = manga.coverUrl || manga.thumbnail || manga.cover;
-  const showImg = cover && !imgError;
+  const showImg = coverUrl && !imgError;
   
   return (
     <Link href={`/manga/${manga.id}`} className="group block">
-      <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+      <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
         {/* Cover */}
-        <div className="aspect-[3/4] bg-gray-100 relative overflow-hidden">
-          {showImg ? (
+        <div className="aspect-[3/4] bg-zinc-800 relative overflow-hidden">
+          {isLoading ? (
+            <div className="w-full h-full flex items-center justify-center animate-pulse">
+              <BookOpen className="w-8 h-8 text-zinc-600" />
+            </div>
+          ) : showImg ? (
             <img
-              src={cover}
+              src={coverUrl}
               alt=""
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
-              onError={() => setImgError(true)}
+              onError={() => {
+                setImgError(true);
+                setCoverUrl(PLACEHOLDER_COVER);
+              }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <BookOpen className="w-8 h-8 text-gray-300" />
+              <BookOpen className="w-8 h-8 text-zinc-600" />
             </div>
           )}
           
@@ -43,11 +81,11 @@ export default function MangaCard({ manga }) {
         
         {/* Info */}
         <div className="p-2.5">
-          <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug group-hover:text-indigo-600 transition-colors">
+          <h3 className="text-sm font-medium text-zinc-100 line-clamp-2 leading-snug group-hover:text-orange-400 transition-colors">
             {manga.title || 'Unknown'}
           </h3>
           {manga.chapterCount > 0 && (
-            <p className="text-xs text-gray-500 mt-1">Ch. {manga.chapterCount}</p>
+            <p className="text-xs text-zinc-500 mt-1">Ch. {manga.chapterCount}</p>
           )}
         </div>
       </div>

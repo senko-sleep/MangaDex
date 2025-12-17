@@ -108,15 +108,15 @@ export class MangaDexScraper extends BaseScraper {
     const contentRating = m.attributes?.contentRating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
     
-    // Use proxy for cover images to bypass hotlink protection
-    const coverUrl = cover ? `https://mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
+    // Direct MangaDex cover URL
+    const coverUrl = cover ? `https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg` : null;
     
     return {
       id: `mangadex:${m.id}`,
       sourceId: 'mangadex',
       slug: m.id,
       title: m.attributes?.title?.en || m.attributes?.title?.['ja-ro'] || Object.values(m.attributes?.title || {})[0] || 'Unknown',
-      cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+      cover: coverUrl,
       status: m.attributes?.status,
       contentRating,
       isAdult,
@@ -151,8 +151,8 @@ export class MangaDexScraper extends BaseScraper {
       const altTitles = m.attributes?.altTitles || [];
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
       
-      // Proxy cover image
-      const coverUrl = cover ? `https://mangadex.org/covers/${mangaId}/${cover}` : null;
+      // Direct MangaDex cover URL
+      const coverUrl = cover ? `https://uploads.mangadex.org/covers/${mangaId}/${cover}` : null;
 
       return {
         id,
@@ -161,7 +161,7 @@ export class MangaDexScraper extends BaseScraper {
         title,
         altTitles: altTitles.map(t => Object.values(t)[0]).filter(Boolean),
         description,
-        cover: coverUrl ? `/api/proxy/image?url=${encodeURIComponent(coverUrl)}` : null,
+        cover: coverUrl,
         status: m.attributes?.status,
         contentRating,
         isAdult,
