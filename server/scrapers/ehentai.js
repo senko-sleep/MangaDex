@@ -220,6 +220,140 @@ export class EHentaiScraper extends BaseScraper {
     }];
   }
 
+  async getChapterPages(chapterId, mangaId) {
+    try {
+      // chapterId format: gid_token or gid/token
+      const slug = chapterId.replace('ehentai:', '');
+      const [gid, token] = slug.includes('_') ? slug.split('_') : slug.split('/');
+      
+      const galleryUrl = `${this.baseUrl}/g/${gid}/${token}/`;
+      console.log('[E-Hentai] Fetching gallery pages:', galleryUrl);
+      
+      // First, get total page count from gallery details
+      let totalPages = 0;
+      const details = await this.getMangaDetails(`ehentai:${gid}_${token}`);
+      if (details && details.pageCount) {
+        totalPages = parseInt(details.pageCount);
+        console.log(`[E-Hentai] Gallery has ${totalPages} total pages`);
+      }
+      
+      const allPageLinks = [];
+      let currentPage = 0;
+      
+      // Fetch all gallery listing pages to get all image page links
+      // E-Hentai shows 20 thumbnails per page (at ?p=0, ?p=1, etc.)
+      const maxGalleryPages = Math.ceil(totalPages / 20) || 10;
+      
+      for (let gp = 0; gp < maxGalleryPages; gp++) {
+        const pageUrl = gp === 0 ? galleryUrl : `${galleryUrl}?p=${gp}`;
+        const $ = await this.fetch(pageUrl);
+        
+        if (!$) {
+          console.log(`[E-Hentai] Failed to fetch gallery page ${gp}`);
+          break;
+        }
+        
+        let foundOnThisPage = 0;
+        
+        // Extract page links from thumbnails
+        // Look for links matching /s/hash/gid-pagenum pattern
+        $('a[href*="/s/"]').each((i, el) => {
+          const href = $(el).attr('href');
+          if (href && href.match(/\/s\/[a-f0-9]+\/\d+-\d+/)) {
+            const thumbnail = $(el).find('img').attr('src') || $(el).find('img').attr('data-src') || '';
+            allPageLinks.push({
+              index: allPageLinks.length + 1,
+              pageUrl: href,
+              thumbnail,
+            });
+            foundOnThisPage++;
+          }
+        });
+        
+        // Also check for extended/compact layout
+        if (foundOnThisPage === 0) {
+          $('div.gdtm a, div.gdtl a').each((i, el) => {
+            const href = $(el).attr('href');
+            if (href && href.includes('/s/')) {
+              const thumbnail = $(el).find('img').attr('src') || '';
+              allPageLinks.push({
+                index: allPageLinks.length + 1,
+                pageUrl: href,
+                thumbnail,
+              });
+              foundOnThisPage++;
+            }
+          });
+        }
+        
+        console.log(`[E-Hentai] Gallery page ${gp}: found ${foundOnThisPage} image links`);
+        
+        // Stop if we found no new pages (reached the end)
+        if (foundOnThisPage === 0) break;
+        
+        // Small delay between gallery page fetches
+        if (gp < maxGalleryPages - 1) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+      
+      console.log(`[E-Hentai] Total page links found: ${allPageLinks.length}`);
+      
+      // Resolve actual image URLs from page links
+      // Limit to prevent too many requests for very large galleries
+      const pagesToResolve = allPageLinks.slice(0, Math.min(allPageLinks.length, 200));
+      const resolvedPages = [];
+      const batchSize = 5;
+      
+      for (let i = 0; i < pagesToResolve.length; i += batchSize) {
+        const batch = pagesToResolve.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async (page) => {
+            try {
+              const $page = await this.fetch(page.pageUrl);
+              if (!$page) return { page: page.index, url: page.thumbnail, originalUrl: page.thumbnail };
+              
+              // Get the full-size image from the page
+              let imgUrl = $page('img#img').attr('src') || '';
+              
+              // Proxy the image URL
+              const proxyUrl = imgUrl ? `/api/proxy/image?url=${encodeURIComponent(imgUrl)}` : page.thumbnail;
+              
+              return {
+                page: page.index,
+                url: proxyUrl,
+                originalUrl: imgUrl || page.thumbnail,
+              };
+            } catch (e) {
+              return {
+                page: page.index,
+                url: page.thumbnail,
+                originalUrl: page.thumbnail,
+              };
+            }
+          })
+        );
+        resolvedPages.push(...batchResults);
+        
+        // Progress log for large galleries
+        if (pagesToResolve.length > 20) {
+          console.log(`[E-Hentai] Resolved ${resolvedPages.length}/${pagesToResolve.length} pages`);
+        }
+        
+        // Small delay between batches
+        if (i + batchSize < pagesToResolve.length) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+      
+      console.log(`[E-Hentai] Final: Resolved ${resolvedPages.length} page images`);
+      return resolvedPages;
+    } catch (e) {
+      console.error('[E-Hentai] Pages error:', e.message);
+      return [];
+    }
+  }
+
   async getTags() {
     return [
       'translated', 'chinese', 'english', 'japanese', 'full color',

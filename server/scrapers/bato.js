@@ -4,9 +4,10 @@ import BaseScraper from './base.js';
 const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
 
 // Bato.to - Large manga library with multiple languages
+// Note: bato.to redirects to batotoo.com
 export class BatoScraper extends BaseScraper {
   constructor() {
-    super('Bato', 'https://bato.to', false);
+    super('Bato', 'https://batotoo.com', false);
   }
 
   // Return direct URL for Bato - their CDN blocks server requests
@@ -137,9 +138,15 @@ export class BatoScraper extends BaseScraper {
     
     // Bato v3 search results - each manga card contains title link and cover
     // Look for the manga title link which goes to /title/ or /series/
+    // Format: /title/173794-on-the-way-to-meet-mom-utoon (manga)
+    // vs /title/173794-on-the-way-to-meet-mom-utoon/3400704-ch_22 (chapter)
     $('a[href*="/title/"], a[href*="/series/"]').each((_, el) => {
       const $link = $(el);
       const href = $link.attr('href') || '';
+      
+      // Skip chapter links (they have an additional path segment with chapter ID)
+      // Chapter URLs: /title/slug/chapterid-ch_number
+      if (href.match(/\/title\/[^/]+\/\d+-/)) return;
       
       // Extract slug from URL like /title/12345-manga-name
       const match = href.match(/\/(?:title|series)\/(\d+[-\w]*)/);
@@ -150,8 +157,13 @@ export class BatoScraper extends BaseScraper {
       // Skip if we've already seen this manga
       if (seen.has(slug)) return;
       
-      // Get the card/container element
-      const $card = $link.closest('div[data-hk]') || $link.parent().parent();
+      // Get the card/container element - go up to find a container with an image
+      let $card = $link.parent();
+      let attempts = 0;
+      while ($card.length && !$card.find('img').length && attempts < 5) {
+        $card = $card.parent();
+        attempts++;
+      }
       
       // Get title - prefer the link's own text or title attribute
       // Skip if it looks like a chapter title (contains "Chapter", "Ch.", numbers only)
@@ -357,35 +369,29 @@ export class BatoScraper extends BaseScraper {
     const chapters = [];
     const slug = mangaId.replace('bato:', '');
     
-    // Method 1: Look for direct chapter links
-    $('a[href*="/chapter/"]').each((_, el) => {
+    // Method 1: Look for chapter links in the new URL format
+    // New format: /title/slug/chapterid-ch_number or /title/slug/chapterid-vol_X-ch_Y
+    $('a[href*="/title/"]').each((_, el) => {
       const $el = $(el);
       const href = $el.attr('href') || '';
       
-      // Extract chapter ID from URL like /chapter/12345
-      const match = href.match(/\/chapter\/(\d+)/);
+      // Match chapter URLs: /title/slug/chapterid-ch_XX or /title/slug/chapterid-vol_X-ch_Y
+      const match = href.match(/\/title\/[^/]+\/(\d+)(?:-vol_(\d+))?-ch_([\d.]+)/i);
       if (!match) return;
       
       const chapterId = match[1];
+      const volume = match[2] || null;
+      const chapterNum = match[3];
       
-      // Get chapter text
+      // Get chapter text for title
       const text = $el.text().trim();
       
-      // Parse chapter number from text like "Chapter 123" or "Ch. 123" or just the number
-      const chapterMatch = text.match(/(?:chapter|ch\.?)\s*([\d.]+)/i) || text.match(/^([\d.]+)$/);
-      const chapterNum = chapterMatch ? chapterMatch[1] : '0';
+      // Extract title (text after "Chapter XX:" pattern)
+      let chapterTitle = text.replace(/^(chapter|ch\.?)\s*[\d.]+\s*[:.-]?\s*/i, '').trim();
+      if (chapterTitle.match(/^[\d.]+$/)) chapterTitle = '';
       
-      // Get chapter title (text after chapter number)
-      let chapterTitle = text.replace(/(?:chapter|ch\.?)\s*[\d.]+\s*[-:.]?\s*/i, '').trim();
-      if (chapterTitle === chapterNum) chapterTitle = '';
-      
-      // Get volume if available
-      const volumeMatch = text.match(/(?:volume|vol\.?)\s*(\d+)/i);
-      const volume = volumeMatch ? volumeMatch[1] : null;
-      
-      // Get date and group from parent/sibling elements
-      const $parent = $el.parent();
-      const $row = $el.closest('div[data-hk], tr, .chapter-row');
+      // Get date from parent/sibling elements
+      const $row = $el.closest('div[data-hk], div.flex, tr');
       const dateText = $row.find('time').attr('datetime') ||
                        $row.find('time').text().trim() ||
                        $row.text().match(/(\d+\s*(?:days?|hours?|mins?|weeks?|months?|years?)\s*ago)/i)?.[1] || '';
@@ -410,11 +416,42 @@ export class BatoScraper extends BaseScraper {
       });
     });
     
-    // Method 2: Parse from href pattern in title pages
-    // Pattern: /title/XXXXX-manga-name/CHAPTERID-ch_NUM
+    // Method 2: Also check for /chapter/ links (old format)
+    if (chapters.length === 0) {
+      $('a[href*="/chapter/"]').each((_, el) => {
+        const $el = $(el);
+        const href = $el.attr('href') || '';
+        
+        const match = href.match(/\/chapter\/(\d+)/);
+        if (!match) return;
+        
+        const chapterId = match[1];
+        const text = $el.text().trim();
+        
+        const chapterMatch = text.match(/(?:chapter|ch\.?)\s*([\d.]+)/i) || text.match(/^([\d.]+)$/);
+        const chapterNum = chapterMatch ? chapterMatch[1] : '0';
+        
+        if (!chapters.some(c => c.id === chapterId)) {
+          chapters.push({
+            id: chapterId,
+            mangaId,
+            chapter: chapterNum,
+            volume: null,
+            title: '',
+            date: null,
+            scanlationGroup: 'Unknown',
+            language: 'en',
+            sourceId: 'bato',
+          });
+        }
+      });
+    }
+    
+    // Method 3: Parse from raw HTML for any remaining patterns
     if (chapters.length === 0) {
       const html = $.html();
-      const chapterPattern = /href="\/title\/[^"]+\/(\d+)-ch_([\d.]+)"/g;
+      // Pattern: /title/slug/chapterid-ch_num
+      const chapterPattern = /href="\/title\/[^"]+\/(\d+)(?:-vol_\d+)?-ch_([\d.]+)"/gi;
       let match;
       while ((match = chapterPattern.exec(html)) !== null) {
         const chapterId = match[1];
@@ -449,7 +486,10 @@ export class BatoScraper extends BaseScraper {
 
   async getChapterPages(chapterId, mangaId) {
     try {
+      // Use /chapter/chapterId format - this returns the imgHttps array
+      // The /title/slug/chapterId format is just a preview page without images
       const url = `${this.baseUrl}/chapter/${chapterId}`;
+      
       console.log('[Bato] Fetching pages:', url);
       
       const $ = await this.fetch(url);
