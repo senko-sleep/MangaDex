@@ -8,6 +8,8 @@ import MangaDexSource from './mangadex';
 import MangaKakalotSource from './mangakakalot';
 import MangaSeeSource from './mangasee';
 import MangaParkSource from './mangapark';
+import BatoSource from './bato';
+import KitsuSource from './kitsu';
 import NHentaiSource from './nhentai';
 import HentaiReadSource from './hentairead';
 import HitomiSource from './hitomi';
@@ -25,6 +27,8 @@ const SOURCES = {
   mangakakalot: MangaKakalotSource,
   mangasee: MangaSeeSource,
   mangapark: MangaParkSource,
+  bato: BatoSource,
+  kitsu: KitsuSource,
   comick: ComickSource,
   // Adult content sources (doujinshi, manga, CG sets)
   nhentai: NHentaiSource,
@@ -42,6 +46,8 @@ const sourceStatus = {
   mangakakalot: { name: 'MangaKakalot', available: true, lastCheck: Date.now(), adult: false },
   mangasee: { name: 'MangaSee', available: true, lastCheck: Date.now(), adult: false },
   mangapark: { name: 'MangaPark', available: true, lastCheck: Date.now(), adult: false },
+  bato: { name: 'Bato.to', available: true, lastCheck: Date.now(), adult: false },
+  kitsu: { name: 'Kitsu', available: true, lastCheck: Date.now(), adult: false },
   comick: { name: 'Comick', available: true, lastCheck: Date.now(), adult: false },
   // Adult content sources (doujinshi, manga, CG sets)
   nhentai: { name: 'nhentai', available: true, lastCheck: Date.now(), adult: true },

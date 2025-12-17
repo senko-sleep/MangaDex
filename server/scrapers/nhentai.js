@@ -104,6 +104,14 @@ export class NHentaiScraper extends BaseScraper {
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
+      // Defensive: if tags is not an array (e.g., called with sort string), reset it
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+      if (!Array.isArray(excludeTags)) {
+        excludeTags = [];
+      }
+      
       // If tags or language provided, use search with popular sort
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         let searchQuery = tags.join(' ');
@@ -131,6 +139,14 @@ export class NHentaiScraper extends BaseScraper {
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
+      // Defensive: if tags is not an array (e.g., called with sort string), reset it
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+      if (!Array.isArray(excludeTags)) {
+        excludeTags = [];
+      }
+      
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         let searchQuery = tags.join(' ');

@@ -245,6 +245,14 @@ export class HitomiScraper extends BaseScraper {
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
+      // Defensive: if tags is not an array (e.g., called with sort string), reset it
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+      if (!Array.isArray(excludeTags)) {
+        excludeTags = [];
+      }
+      
       // Hitomi popular page - uses week/month for more results
       // today has fewer, week/month have more sorted by popularity
       const period = 'week'; // 'today', 'week', 'month', 'year'
