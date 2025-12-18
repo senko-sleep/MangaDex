@@ -23,43 +23,83 @@ export class IMHentaiScraper extends BaseScraper {
       let tags = [];
       let excludeTags = [];
       let language = null;
-      
+      let contentType = null;
+      let sortBy = 'latest';
+
       if (typeof options === 'number') {
-        // Old style: search(query, page, includeAdult, tags, excludeTags, language)
         page = options || 1;
         tags = arguments[3] || [];
         excludeTags = arguments[4] || [];
         language = arguments[5] || null;
       } else {
-        // New style: search(query, { page, limit, language, type, category, tags, exclude })
         page = options.page || 1;
         tags = options.tags || [];
         excludeTags = options.exclude || [];
         language = options.language || null;
+        contentType = options.type;
+        sortBy = options.sort || 'latest';
       }
-      
-      // Build search query - IMHentai supports tag search in query
+
+      const params = new URLSearchParams();
+
+      // Build search query
       let searchQuery = query || '';
-      
-      // Add language filter
-      if (language && language !== 'all') {
-        searchQuery += ` ${language}`;
-      }
-      
-      // Add tags to search query if provided
+
+      // IMHentai handles tags better if they are in the key parameter
       if (tags && tags.length > 0) {
-        searchQuery += ' ' + tags.join(' ');
+        // Replace spaces with underscores for tags
+        const formattedTags = tags.map(t => t.replace(/\s+/g, '_'));
+        searchQuery += (searchQuery ? ' ' : '') + formattedTags.join(' ');
       }
-      
-      searchQuery = searchQuery.trim();
-      
-      // If no query at all, return popular instead
-      if (!searchQuery) {
-        return this.getPopular(options);
+
+      if (excludeTags && excludeTags.length > 0) {
+        const formattedExcludes = excludeTags.map(t => '-' + t.replace(/\s+/g, '_'));
+        searchQuery += (searchQuery ? ' ' : '') + formattedExcludes.join(' ');
       }
-      
-      const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
-      console.log('[IMHentai] Searching:', searchUrl);
+
+      params.set('key', searchQuery.trim() || '*');
+      params.set('page', String(page));
+
+      // Category filters (1 = enabled, 0 = disabled)
+      // If a specific content type is requested, enable ONLY that one
+      // Otherwise enable all search categories to "search deeper"
+      const typeFlags = {
+        m: 1, // Manga
+        d: 1, // Doujinshi
+        w: 1, // Western
+        i: 1, // Image Set
+        a: 1, // Artist CG
+        g: 1, // Game CG
+      };
+
+      if (contentType && contentType !== 'all') {
+        // Reset all to 0
+        Object.keys(typeFlags).forEach(k => typeFlags[k] = 0);
+        // Enable selected
+        if (contentType === 'manga') typeFlags.m = 1;
+        else if (contentType === 'doujinshi') typeFlags.d = 1;
+        else if (contentType === 'western') typeFlags.w = 1;
+        else if (contentType === 'imageset') typeFlags.i = 1;
+        else if (contentType === 'artistcg') typeFlags.a = 1;
+        else if (contentType === 'gamecg') typeFlags.g = 1;
+      }
+
+      Object.entries(typeFlags).forEach(([k, v]) => params.set(k, String(v)));
+
+      // Language filters
+      if (language && language !== 'all') {
+        const langCode = language.substring(0, 2).toLowerCase();
+        // IMHentai uses en, jp, es, fr, kr, de, ru, it, tr codes
+        params.set(langCode, '1');
+      }
+
+      // Sorting
+      if (sortBy === 'popular') {
+        params.set('sort', 'popular'); // Or 'downloads' / 'views'
+      }
+
+      const searchUrl = `${this.baseUrl}/search/?${params}`;
+      console.log('[IMHentai] Searching deeper:', searchUrl);
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
       return this.parseGalleryList($);
@@ -76,7 +116,7 @@ export class IMHentaiScraper extends BaseScraper {
       let tags = [];
       let excludeTags = [];
       let language = null;
-      
+
       if (typeof options === 'number') {
         // Old style: getPopular(page, includeAdult, tags, excludeTags, language)
         page = options || 1;
@@ -90,12 +130,12 @@ export class IMHentaiScraper extends BaseScraper {
         excludeTags = options.exclude || [];
         language = options.language || null;
       }
-      
+
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         return this.search('', options);
       }
-      
+
       const popularUrl = `${this.baseUrl}/popular/?page=${page}`;
       console.log('[IMHentai] Fetching popular:', popularUrl);
       const $ = await this.fetch(popularUrl);
@@ -114,7 +154,7 @@ export class IMHentaiScraper extends BaseScraper {
       let tags = [];
       let excludeTags = [];
       let language = null;
-      
+
       if (typeof options === 'number') {
         // Old style: getLatest(page, includeAdult, tags, excludeTags, language)
         page = options || 1;
@@ -128,12 +168,12 @@ export class IMHentaiScraper extends BaseScraper {
         excludeTags = options.exclude || [];
         language = options.language || null;
       }
-      
+
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         return this.search('', options);
       }
-      
+
       const latestUrl = `${this.baseUrl}/?page=${page}`;
       console.log('[IMHentai] Fetching latest:', latestUrl);
       const $ = await this.fetch(latestUrl);
@@ -147,20 +187,20 @@ export class IMHentaiScraper extends BaseScraper {
 
   parseGalleryList($) {
     const results = [];
-    
+
     // IMHentai gallery list - uses div.thumb containers
     $('.thumb').each((_, el) => {
       const $el = $(el);
-      
+
       // Get gallery link from inner_thumb > a
       const link = $el.find('.inner_thumb a, a[href*="/gallery/"]').first();
       const href = link.attr('href') || '';
       const match = href.match(/\/gallery\/(\d+)/);
-      
+
       if (!match) return;
-      
+
       const gid = match[1];
-      
+
       // Get title from caption div or h2, or from link title attribute
       let title = $el.find('.caption, .gallery_title').text().trim();
       if (!title) {
@@ -175,19 +215,19 @@ export class IMHentaiScraper extends BaseScraper {
       if (!title || title === 'IMG') {
         title = `Gallery ${gid}`;
       }
-      
+
       // Get cover from lazy-loaded img
-      let cover = $el.find('img.lazy').attr('data-src') || 
-                  $el.find('img').attr('data-src') ||
-                  $el.find('img').attr('src');
-      
+      let cover = $el.find('img.lazy').attr('data-src') ||
+        $el.find('img').attr('data-src') ||
+        $el.find('img').attr('src');
+
       if (cover && !cover.startsWith('http')) {
         cover = `https://imhentai.xxx${cover}`;
       }
-      
+
       // Get category from thumb_cat span
       const category = $el.find('.thumb_cat, .category').text().trim().toLowerCase() || 'doujinshi';
-      
+
       if (gid) {
         results.push({
           id: `imhentai:${gid}`,
@@ -220,15 +260,15 @@ export class IMHentaiScraper extends BaseScraper {
 
   async getMangaDetails(id) {
     const gid = id.replace('imhentai:', '');
-    
+
     try {
       const $ = await this.fetch(`${this.baseUrl}/gallery/${gid}/`);
       if (!$) return null;
-      
+
       const title = $('h1').first().text().trim();
       // Cover is in .left_cover div, not .cover
       const cover = $('.left_cover img').attr('data-src') || $('.left_cover img').attr('src');
-      
+
       // Parse tags
       const tags = [];
       const artists = [];
@@ -236,12 +276,12 @@ export class IMHentaiScraper extends BaseScraper {
       const parodies = [];
       const characters = [];
       const languages = [];
-      
+
       $('.tag_list, .tags').find('a').each((_, el) => {
         const $tag = $(el);
         const href = $tag.attr('href') || '';
         const tagName = $tag.text().trim().replace(/\s*\d+$/, ''); // Remove count
-        
+
         if (href.includes('/artist/')) artists.push(tagName);
         else if (href.includes('/group/')) groups.push(tagName);
         else if (href.includes('/parody/')) parodies.push(tagName);
@@ -249,7 +289,7 @@ export class IMHentaiScraper extends BaseScraper {
         else if (href.includes('/language/')) languages.push(tagName);
         else if (href.includes('/tag/')) tags.push(tagName);
       });
-      
+
       // Get page count
       const pageText = $('.pages').text() || '';
       const pageMatch = pageText.match(/(\d+)/);
@@ -290,31 +330,31 @@ export class IMHentaiScraper extends BaseScraper {
 
   async getChapterPages(chapterId, mangaId) {
     const gid = mangaId.replace('imhentai:', '');
-    
+
     try {
       const $ = await this.fetch(`${this.baseUrl}/gallery/${gid}/`);
       if (!$) return [];
-      
+
       const pages = [];
-      
+
       // IMHentai embeds page info in hidden inputs:
       // load_server, load_dir, load_id, load_pages
       const server = $('#load_server').val();
       const dir = $('#load_dir').val();
       const loadId = $('#load_id').val();
       const totalPages = parseInt($('#load_pages').val()) || 0;
-      
+
       if (server && dir && loadId && totalPages > 0) {
         // Detect correct extension by checking first image
         // Thumbnails always use .jpg but full images can be .jpg or .webp
         let ext = 'jpg';
-        
+
         // Try to detect from first thumbnail's actual full image
         const firstThumb = $('.gthumb img').first().attr('data-src') || '';
         if (firstThumb) {
           // Extract base URL pattern from thumbnail
           const baseUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/1`;
-          
+
           // Check if webp exists (most common for newer galleries)
           try {
             const testRes = await this.client.head(`${baseUrl}.webp`, {
@@ -338,9 +378,9 @@ export class IMHentaiScraper extends BaseScraper {
             }
           }
         }
-        
+
         console.log(`[IMHentai] Gallery ${gid}: Using extension .${ext}`);
-        
+
         // Build all page URLs using the pattern
         for (let i = 1; i <= totalPages; i++) {
           const fullUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`;
@@ -351,26 +391,26 @@ export class IMHentaiScraper extends BaseScraper {
           });
         }
       }
-      
+
       // Fallback to thumbnail scraping if hidden inputs not found
       if (pages.length === 0) {
         $('.gthumb').each((i, el) => {
           const $el = $(el);
           let src = $el.find('img').attr('data-src') || $el.find('img').attr('src') || '';
-          
+
           if (!src || src.includes('svg') || src.includes('logo')) return;
-          
+
           // Convert thumbnail to full image: 1t.jpg -> 1.jpg
           if (src.match(/\d+t\.(jpg|png|gif|webp)/i)) {
             src = src.replace(/(\d+)t\./, '$1.');
           }
-          
+
           if (src.startsWith('//')) {
             src = 'https:' + src;
           } else if (src.startsWith('/')) {
             src = this.baseUrl + src;
           }
-          
+
           if (src.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
             pages.push({
               page: pages.length + 1,

@@ -11,7 +11,7 @@ export class MangaDexScraper extends BaseScraper {
     this.tagCache = null;
     this.tagCacheTime = 0;
   }
-  
+
   // Helper to create proxy URL - returns absolute URL for cross-origin access
   proxyUrl(url) {
     const base = API_BASE || 'https://mangadex-i6sv.onrender.com';
@@ -21,7 +21,7 @@ export class MangaDexScraper extends BaseScraper {
   // Get tag IDs from tag names (for API filtering)
   async getTagIds(tagNames) {
     if (!tagNames || tagNames.length === 0) return [];
-    
+
     // Load tags cache if needed
     if (!this.tagCache || Date.now() - this.tagCacheTime > 3600000) {
       try {
@@ -33,10 +33,10 @@ export class MangaDexScraper extends BaseScraper {
         return [];
       }
     }
-    
+
     // Find tag IDs matching the names
     return tagNames.map(name => {
-      const tag = this.tagCache.find(t => 
+      const tag = this.tagCache.find(t =>
         t.attributes?.name?.en?.toLowerCase() === name.toLowerCase()
       );
       return tag?.id;
@@ -51,7 +51,7 @@ export class MangaDexScraper extends BaseScraper {
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('hasAvailableChapters', 'true');
-      
+
       // Map sort option to MangaDex API order parameters
       if (sort === 'latest') {
         params.append('order[createdAt]', 'desc');
@@ -63,17 +63,22 @@ export class MangaDexScraper extends BaseScraper {
         // Default: popular by followers
         params.append('order[followedCount]', 'desc');
       }
-      
+
       // Content ratings
-      params.append('contentRating[]', 'safe');
-      params.append('contentRating[]', 'suggestive');
-      if (includeAdult) {
+      if (adultOnly) {
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
+      } else {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
+        if (includeAdult) {
+          params.append('contentRating[]', 'erotica');
+          params.append('contentRating[]', 'pornographic');
+        }
       }
-      
+
       if (query) params.set('title', query);
-      
+
       // Add status filter - MangaDex uses status[] parameter
       if (status) {
         const statusMap = {
@@ -86,13 +91,13 @@ export class MangaDexScraper extends BaseScraper {
           params.append('status[]', statusMap[status]);
         }
       }
-      
+
       // Add tag filtering using MangaDex API
       if (tags.length > 0) {
         const tagIds = await this.getTagIds(tags);
         tagIds.forEach(id => params.append('includedTags[]', id));
       }
-      
+
       if (excludeTags.length > 0) {
         const excludeIds = await this.getTagIds(excludeTags);
         excludeIds.forEach(id => params.append('excludedTags[]', id));
@@ -106,11 +111,11 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, sort = 'popular') {
-    return this.search('', page, includeAdult, [], [], null, false, null, sort);
+  async getPopular(page = 1, includeAdult = true, sort = 'popular', adultOnly = false) {
+    return this.search('', page, includeAdult, [], [], null, adultOnly, null, sort);
   }
 
-  async getLatest(page = 1, includeAdult = true) {
+  async getLatest(page = 1, includeAdult = true, adultOnly = false) {
     try {
       const offset = (page - 1) * 50;
       // Build params with multiple content ratings
@@ -120,12 +125,18 @@ export class MangaDexScraper extends BaseScraper {
       params.append('includes[]', 'cover_art');
       params.append('order[latestUploadedChapter]', 'desc');
       params.append('hasAvailableChapters', 'true');
-      
-      // Content ratings - include ALL by default
-      params.append('contentRating[]', 'safe');
-      params.append('contentRating[]', 'suggestive');
-      params.append('contentRating[]', 'erotica');
-      params.append('contentRating[]', 'pornographic');
+
+      if (adultOnly) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      } else {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
+        if (includeAdult) {
+          params.append('contentRating[]', 'erotica');
+          params.append('contentRating[]', 'pornographic');
+        }
+      }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
       return (res.data?.data || []).map(m => this.formatManga(m));
@@ -135,7 +146,7 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getNewlyAdded(page = 1, includeAdult = true) {
+  async getNewlyAdded(page = 1, includeAdult = true, adultOnly = false) {
     try {
       const offset = (page - 1) * 50;
       const params = new URLSearchParams();
@@ -144,12 +155,17 @@ export class MangaDexScraper extends BaseScraper {
       params.append('includes[]', 'cover_art');
       params.append('order[createdAt]', 'desc');
       params.append('hasAvailableChapters', 'true');
-      
-      params.append('contentRating[]', 'safe');
-      params.append('contentRating[]', 'suggestive');
-      if (includeAdult) {
+
+      if (adultOnly) {
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
+      } else {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
+        if (includeAdult) {
+          params.append('contentRating[]', 'erotica');
+          params.append('contentRating[]', 'pornographic');
+        }
       }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
@@ -160,7 +176,7 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getTopRated(page = 1, includeAdult = true) {
+  async getTopRated(page = 1, includeAdult = true, adultOnly = false) {
     try {
       const offset = (page - 1) * 50;
       const params = new URLSearchParams();
@@ -169,12 +185,17 @@ export class MangaDexScraper extends BaseScraper {
       params.append('includes[]', 'cover_art');
       params.append('order[rating]', 'desc');
       params.append('hasAvailableChapters', 'true');
-      
-      params.append('contentRating[]', 'safe');
-      params.append('contentRating[]', 'suggestive');
-      if (includeAdult) {
+
+      if (adultOnly) {
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
+      } else {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
+        if (includeAdult) {
+          params.append('contentRating[]', 'erotica');
+          params.append('contentRating[]', 'pornographic');
+        }
       }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
@@ -191,10 +212,10 @@ export class MangaDexScraper extends BaseScraper {
     const isLongStrip = tags.some(t => t.attributes?.name?.en === 'Long Strip');
     const contentRating = m.attributes?.contentRating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic';
-    
+
     // Proxy MangaDex cover URL for cross-origin access
     const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${m.id}/${cover}.256.jpg`) : null;
-    
+
     return {
       id: `mangadex:${m.id}`,
       sourceId: 'mangadex',
@@ -234,7 +255,7 @@ export class MangaDexScraper extends BaseScraper {
       const titles = m.attributes?.title || {};
       const altTitles = m.attributes?.altTitles || [];
       const title = titles.en || titles['ja-ro'] || titles.ja || Object.values(titles)[0] || 'Unknown';
-      
+
       // Proxy MangaDex cover URL for cross-origin access
       const coverUrl = cover ? this.proxyUrl(`https://uploads.mangadex.org/covers/${mangaId}/${cover}`) : null;
 
@@ -309,31 +330,31 @@ export class MangaDexScraper extends BaseScraper {
       // Keep ALL chapters - don't deduplicate, let user choose
       // But filter to prefer: English with pages > English external > Other languages with pages
       const chapterMap = new Map();
-      
+
       for (const ch of allChapters) {
         const num = ch.attributes?.chapter || '0';
         const vol = ch.attributes?.volume || '';
         const lang = ch.attributes?.translatedLanguage || 'unknown';
         const isExternal = !!ch.attributes?.externalUrl;
         const pages = ch.attributes?.pages || 0;
-        
+
         // Key by chapter number + language for unique entries
         const key = `${vol}-${num}-${lang}`;
-        
+
         const existing = chapterMap.get(key);
-        
+
         // For same chapter+language, prefer one with more pages
         if (!existing || pages > (existing.attributes?.pages || 0)) {
           chapterMap.set(key, ch);
         }
       }
-      
+
       // Return ALL unique chapters (all languages) - let frontend filter/display
       // Convert to result format - include all versions
       const result = Array.from(chapterMap.values()).map(ch => {
         const group = ch.relationships?.find(r => r.type === 'scanlation_group');
         const externalUrl = ch.attributes?.externalUrl;
-        
+
         return {
           id: ch.id,
           mangaId,
@@ -372,7 +393,7 @@ export class MangaDexScraper extends BaseScraper {
       // First, check if this is an external chapter
       const chapterRes = await this.client.get(`${this.baseUrl}/chapter/${chapterId}`);
       const chapterData = chapterRes.data?.data;
-      
+
       if (chapterData?.attributes?.externalUrl) {
         // External chapter - return the external URL
         console.log(`[MangaDex] Chapter ${chapterId} is external:`, chapterData.attributes.externalUrl);
@@ -387,7 +408,7 @@ export class MangaDexScraper extends BaseScraper {
       // Regular chapter - get pages from at-home server
       const res = await this.client.get(`${this.baseUrl}/at-home/server/${chapterId}`);
       const data = res.data;
-      
+
       if (!data?.chapter) {
         console.error('[MangaDex] No chapter data for:', chapterId);
         // Try to return external URL if available
@@ -403,7 +424,7 @@ export class MangaDexScraper extends BaseScraper {
 
       const baseUrl = data.baseUrl;
       const hash = data.chapter.hash;
-      
+
       // High quality pages - use proxy to bypass hotlink protection
       const highQuality = (data.chapter.data || []).map((file, i) => {
         const originalUrl = `${baseUrl}/data/${hash}/${file}`;
@@ -445,7 +466,7 @@ export class MangaDexScraper extends BaseScraper {
       // Fetch official tags from MangaDex API
       const res = await this.client.get(`${this.baseUrl}/manga/tag`);
       const tags = res.data?.data || [];
-      
+
       // Extract tag names (genres and themes)
       return tags
         .filter(t => t.attributes?.group === 'genre' || t.attributes?.group === 'theme')

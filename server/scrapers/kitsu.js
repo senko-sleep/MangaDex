@@ -26,7 +26,7 @@ export class KitsuScraper extends BaseScraper {
     const posterImage = attrs.posterImage;
     const cover = posterImage?.large || posterImage?.medium || posterImage?.small || posterImage?.original;
     const title = attrs.canonicalTitle || attrs.titles?.en || attrs.titles?.en_jp || 'Unknown';
-    
+
     return {
       id: `kitsu:${item.id}`,
       title,
@@ -54,7 +54,7 @@ export class KitsuScraper extends BaseScraper {
     if (this.mangadexIdCache.has(title)) {
       return this.mangadexIdCache.get(title);
     }
-    
+
     try {
       // Search MangaDex for this title
       const results = await mangadex.search(title, 1, true);
@@ -63,11 +63,11 @@ export class KitsuScraper extends BaseScraper {
         const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
         const match = results.find(r => {
           const normalizedResult = r.title.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return normalizedResult === normalizedTitle || 
-                 normalizedResult.includes(normalizedTitle) ||
-                 normalizedTitle.includes(normalizedResult);
+          return normalizedResult === normalizedTitle ||
+            normalizedResult.includes(normalizedTitle) ||
+            normalizedTitle.includes(normalizedResult);
         }) || results[0];
-        
+
         const mangadexId = match.id;
         this.mangadexIdCache.set(title, mangadexId);
         return mangadexId;
@@ -75,87 +75,145 @@ export class KitsuScraper extends BaseScraper {
     } catch (e) {
       console.error('[Kitsu] MangaDex lookup error:', e.message);
     }
-    
+
     this.mangadexIdCache.set(title, null);
     return null;
   }
 
-  async search(query, page = 1, includeAdult = true, sort = 'popular') {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false, language = null, sort = 'popular') {
     try {
       const offset = (page - 1) * 20; // Kitsu max is 20
       // Build URL manually to avoid bracket encoding issues
-      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}`; // Kitsu max is 20
-      
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}`;
+
       if (query) {
         url += `&filter[text]=${encodeURIComponent(query)}`;
+      }
+
+      if (adultOnly) {
+        url += `&filter[ageRating]=R18`;
       }
 
       const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
-      return data.data.map(item => this.formatManga(item));
+      let results = data.data.map(item => this.formatManga(item));
+
+      if (adultOnly) {
+        results = results.filter(m => m.isAdult);
+      } else if (!includeAdult) {
+        results = results.filter(m => !m.isAdult);
+      }
+
+      return results;
     } catch (e) {
       console.error('[Kitsu] Search error:', e.message);
       return [];
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, sort = 'popular') {
+  async getPopular(page = 1, includeAdult = true, sort = 'popular', adultOnly = false) {
     try {
-      const offset = (page - 1) * 20; // Kitsu max is 20
-      // Build URL manually to avoid bracket encoding issues
+      const offset = (page - 1) * 20;
       let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-userCount`;
+
+      if (adultOnly) {
+        url += `&filter[ageRating]=R18`;
+      }
 
       const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
-      return data.data.map(item => this.formatManga(item));
+      let results = data.data.map(item => this.formatManga(item));
+
+      if (adultOnly) {
+        results = results.filter(m => m.isAdult);
+      } else if (!includeAdult) {
+        results = results.filter(m => !m.isAdult);
+      }
+
+      return results;
     } catch (e) {
       console.error('[Kitsu] Popular error:', e.message);
       return [];
     }
   }
 
-  async getLatest(page = 1, includeAdult = true) {
+  async getLatest(page = 1, includeAdult = true, adultOnly = false) {
     try {
-      const offset = (page - 1) * 20; // Kitsu max is 20
-      // Build URL manually to avoid bracket encoding issues
+      const offset = (page - 1) * 20;
       let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-updatedAt`;
+
+      if (adultOnly) {
+        url += `&filter[ageRating]=R18`;
+      }
 
       const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
-      return data.data.map(item => this.formatManga(item));
+      let results = data.data.map(item => this.formatManga(item));
+
+      if (adultOnly) {
+        results = results.filter(m => m.isAdult);
+      } else if (!includeAdult) {
+        results = results.filter(m => !m.isAdult);
+      }
+
+      return results;
     } catch (e) {
       console.error('[Kitsu] Latest error:', e.message);
       return [];
     }
   }
 
-  async getNewlyAdded(page = 1, includeAdult = true) {
+  async getNewlyAdded(page = 1, includeAdult = true, adultOnly = false) {
     try {
-      const offset = (page - 1) * 20; // Kitsu max is 20
-      const url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-createdAt`;
+      const offset = (page - 1) * 20;
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-createdAt`;
+
+      if (adultOnly) {
+        url += `&filter[ageRating]=R18`;
+      }
 
       const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
-      return data.data.map(item => this.formatManga(item));
+      let results = data.data.map(item => this.formatManga(item));
+
+      if (adultOnly) {
+        results = results.filter(m => m.isAdult);
+      } else if (!includeAdult) {
+        results = results.filter(m => !m.isAdult);
+      }
+
+      return results;
     } catch (e) {
       console.error('[Kitsu] NewlyAdded error:', e.message);
       return [];
     }
   }
 
-  async getTopRated(page = 1, includeAdult = true) {
+  async getTopRated(page = 1, includeAdult = true, adultOnly = false) {
     try {
-      const offset = (page - 1) * 20; // Kitsu max is 20
-      const url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-averageRating`;
+      const offset = (page - 1) * 20;
+      let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-averageRating`;
+
+      if (adultOnly) {
+        url += `&filter[ageRating]=R18`;
+      }
 
       const data = await this.fetchJson(url);
       if (!data?.data) return [];
 
-      return data.data.map(item => this.formatManga(item));
+      let results = data.data.map(item => this.formatManga(item));
+
+      if (adultOnly) {
+        results = results.filter(m => m.isAdult);
+      } else if (!includeAdult) {
+        results = results.filter(m => !m.isAdult);
+      }
+
+      return results;
     } catch (e) {
       console.error('[Kitsu] TopRated error:', e.message);
       return [];
@@ -173,7 +231,7 @@ export class KitsuScraper extends BaseScraper {
       if (!data?.data) return null;
 
       const manga = this.formatManga(data.data);
-      
+
       // Extract genres from included data
       if (data.included) {
         manga.genres = data.included
@@ -194,7 +252,7 @@ export class KitsuScraper extends BaseScraper {
       // First get the manga details to get the title
       const details = await this.getMangaDetails(mangaId);
       if (!details) return [];
-      
+
       // Try to find on MangaDex using the title
       const mangadexId = await this.findMangaDexId(details.title);
       if (mangadexId) {
@@ -207,7 +265,7 @@ export class KitsuScraper extends BaseScraper {
           _source: 'mangadex',
         }));
       }
-      
+
       console.log(`[Kitsu] No MangaDex match found for "${details.title}"`);
       return [];
     } catch (e) {

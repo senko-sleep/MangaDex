@@ -42,7 +42,7 @@ export class NHentaiScraper extends BaseScraper {
     const titleRegex = /title="([^"]*)"/i;
     const imgRegex = /<img[^>]*data-src="([^"]*)"[^>]*>/i;
     const captionRegex = /<div[^>]*class="caption"[^>]*>([\s\S]*?)<\/div>/i;
-    
+
     let match;
     while ((match = galleryRegex.exec(html)) !== null) {
       const content = match[1];
@@ -50,14 +50,14 @@ export class NHentaiScraper extends BaseScraper {
       const titleMatch = titleRegex.exec(content);
       const imgMatch = imgRegex.exec(content);
       const captionMatch = captionRegex.exec(content);
-      
+
       if (linkMatch) {
         const id = linkMatch[1];
         // Prefer title attribute, then caption text
         let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
         title = this.decodeHtml(title.trim());
         const coverUrl = imgMatch ? imgMatch[1] : '';
-        
+
         results.push(this.formatGallery({ id, title, coverUrl }));
       }
     }
@@ -68,29 +68,29 @@ export class NHentaiScraper extends BaseScraper {
     try {
       // Build search query - nhentai.xxx supports tag search in query
       let searchQuery = query || '';
-      
+
       // Add language filter (english, japanese, chinese)
       if (language && language !== 'all') {
         searchQuery += ` language:${language}`;
       }
-      
+
       // Add tags to search query if provided
       if (tags && tags.length > 0) {
         searchQuery += ' ' + tags.join(' ');
       }
-      
+
       // Add excluded tags with minus prefix
       if (excludeTags && excludeTags.length > 0) {
         searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
       }
-      
+
       searchQuery = searchQuery.trim();
-      
+
       // If no query at all, return popular instead
       if (!searchQuery) {
         return this.getPopular(page, includeAdult, tags, excludeTags, language);
       }
-      
+
       // nhentai.xxx uses 'key' parameter, not 'q'
       const url = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
       const html = await this.fetchHtml(url);
@@ -111,7 +111,7 @@ export class NHentaiScraper extends BaseScraper {
       if (!Array.isArray(excludeTags)) {
         excludeTags = [];
       }
-      
+
       // If tags or language provided, use search with popular sort
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         let searchQuery = tags.join(' ');
@@ -126,7 +126,7 @@ export class NHentaiScraper extends BaseScraper {
         if (!html) return [];
         return this.parseGalleryList(html);
       }
-      
+
       const url = `${this.baseUrl}/?sort=popular&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
@@ -146,7 +146,7 @@ export class NHentaiScraper extends BaseScraper {
       if (!Array.isArray(excludeTags)) {
         excludeTags = [];
       }
-      
+
       // If tags or language provided, use search
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         let searchQuery = tags.join(' ');
@@ -161,7 +161,7 @@ export class NHentaiScraper extends BaseScraper {
         if (!html) return [];
         return this.parseGalleryList(html);
       }
-      
+
       const url = page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl;
       const html = await this.fetchHtml(url);
       if (!html) return [];
@@ -204,25 +204,25 @@ export class NHentaiScraper extends BaseScraper {
 
   async getMangaDetails(id) {
     const galleryId = id.replace('nhentai:', '');
-    
+
     try {
       // Use HTML scraping for nhentai.xxx
       const url = `${this.baseUrl}/g/${galleryId}/`;
       const html = await this.fetchHtml(url);
       if (!html) return null;
-      
+
       // Parse title from <h1>
       const titleMatch = /<h1>([^<]*)<\/h1>/i.exec(html);
       const title = titleMatch ? this.decodeHtml(titleMatch[1].trim()) : `Gallery ${galleryId}`;
-      
+
       // Parse pages count
       const pagesMatch = /pages">(\d+)<\/span>/i.exec(html);
       const pageCount = pagesMatch ? parseInt(pagesMatch[1]) : 0;
-      
+
       // Parse cover image
       const coverMatch = /<img[^>]*class="[^"]*lazyload[^"]*"[^>]*data-src="([^"]*)"[^>]*>/i.exec(html);
       const cover = coverMatch ? coverMatch[1] : '';
-      
+
       // Extract tags
       const tags = [];
       const tagRegex = /<a[^>]*class='tag_btn[^']*'[^>]*href='\/tag\/([^']*)\/'[^>]*>[\s\S]*?<span[^>]*class='tag_name'[^>]*>([^<]*)<\/span>/gi;
@@ -230,7 +230,7 @@ export class NHentaiScraper extends BaseScraper {
       while ((tagMatch = tagRegex.exec(html)) !== null) {
         tags.push(tagMatch[2].trim());
       }
-      
+
       // Extract artist
       const artistMatch = /<a[^>]*href='\/artist\/[^']*'[^>]*>[\s\S]*?<span[^>]*class='tag_name'[^>]*>([^<]*)<\/span>/i.exec(html);
       const artist = artistMatch ? artistMatch[1].trim() : 'Unknown';
@@ -267,36 +267,36 @@ export class NHentaiScraper extends BaseScraper {
 
   async getChapterPages(chapterId, mangaId) {
     const galleryId = mangaId.replace('nhentai:', '');
-    
+
     try {
       const url = `${this.baseUrl}/g/${galleryId}/`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
-      
+
       const pages = [];
-      
+
       // nhentai.xxx embeds page data as JSON: var g_th = $.parseJSON('{"fl":{"1":"j,w,h",...},...}');
       // "fl" = full images, format is "ext_code,width,height" where j=jpg, p=png, g=gif, w=webp
       const jsonMatch = /var g_th = \$\.parseJSON\('(\{[^']+\})'\);/i.exec(html);
-      
+
       if (jsonMatch) {
         try {
           const data = JSON.parse(jsonMatch[1]);
           const fullImages = data.fl || {};
-          
+
           // Get the image server from a thumbnail on the page
           const serverMatch = /https:\/\/(i\d+\.nhentaimg\.com)\/(\d+)\/([^/]+)\//i.exec(html);
           const server = serverMatch ? serverMatch[1] : 'i5.nhentaimg.com';
           const prefix = serverMatch ? serverMatch[2] : '000';
           const hash = serverMatch ? serverMatch[3] : '';
-          
+
           const extMap = { j: 'jpg', p: 'png', g: 'gif', w: 'webp' };
-          
+
           for (const [pageNum, info] of Object.entries(fullImages)) {
             const [extCode] = info.split(',');
             const ext = extMap[extCode] || 'jpg';
             const fullUrl = `https://${server}/${prefix}/${hash}/${pageNum}.${ext}`;
-            
+
             pages.push({
               page: parseInt(pageNum),
               url: this.proxyUrl(fullUrl),
@@ -307,20 +307,20 @@ export class NHentaiScraper extends BaseScraper {
           console.error('[NHentai] JSON parse error:', parseErr.message);
         }
       }
-      
+
       // Fallback to thumbnail scraping if JSON parsing failed
       if (pages.length === 0) {
         const thumbRegex = /<a[^>]*href="\/g\/\d+\/(\d+)\/"[^>]*><img[^>]*data-src="([^"]*)"[^>]*>/gi;
         let match;
-        
+
         while ((match = thumbRegex.exec(html)) !== null) {
           const pageNum = parseInt(match[1]);
           const thumbUrl = match[2];
           // Keep original extension from thumbnail
           const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.');
-          
-          pages.push({ 
-            page: pageNum, 
+
+          pages.push({
+            page: pageNum,
             url: this.proxyUrl(fullUrl),
             originalUrl: fullUrl,
           });

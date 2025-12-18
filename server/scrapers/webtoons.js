@@ -84,7 +84,7 @@ export class WebtoonsScraper extends BaseScraper {
         });
       }
     });
-    
+
     // Dedupe
     const seen = new Set();
     return results.filter(r => {

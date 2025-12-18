@@ -14,7 +14,7 @@ const SOURCE_CONTENT_TYPES = {
   mangasee: ['manga', 'manhwa', 'manhua'],
   mangapark: ['manga', 'manhwa', 'manhua'],
   comick: ['manga', 'manhwa', 'manhua', 'comic'],
-  
+
   // Adult content sources
   nhentai: ['doujinshi', 'manga'],
   hentairead: ['doujinshi', 'manga'],
@@ -54,29 +54,29 @@ const ALL_CONTENT_TYPES = [
  */
 export async function GET(request) {
   const startTime = Date.now();
-  
+
   try {
     const { searchParams } = new URL(request.url);
     const adultParam = searchParams.get('adult');
     const adultOnlyParam = searchParams.get('adultOnly');
     const contentType = searchParams.get('type');
-    
+
     // Parse adult filter parameters
     // adult=false → safe mode (SFW only)
     // adult=true, adultOnly=false → all content
     // adult=true, adultOnly=true → 18+ only mode
     const includeAdult = adultParam === 'true';
     const adultOnly = adultOnlyParam === 'true';
-    
+
     // Get all source statuses
     const allStatus = getSourceStatus();
     const availableSources = getAvailableSources(true); // Get all sources first
-    
+
     // Build detailed source info
     let sources = availableSources.map(name => {
       const status = allStatus[name];
       const source = SOURCES[name];
-      
+
       return {
         id: name,
         name: status?.name || source?.name || name,
@@ -89,7 +89,7 @@ export async function GET(request) {
         lastCheck: status?.lastCheck || Date.now()
       };
     });
-    
+
     // Apply adult filtering logic
     // adultOnly=true → only show adult sources
     // includeAdult=true, adultOnly=false → show all sources
@@ -100,22 +100,22 @@ export async function GET(request) {
       sources = sources.filter(s => !s.adult);
     }
     // else: show all sources
-    
+
     // Filter by content type if specified
     let filteredSources = sources;
     if (contentType) {
       filteredSources = sources.filter(s => s.contentTypes.includes(contentType));
     }
-    
+
     // Get available content types based on current sources
-    const availableContentTypes = ALL_CONTENT_TYPES.filter(type => 
+    const availableContentTypes = ALL_CONTENT_TYPES.filter(type =>
       filteredSources.some(s => s.contentTypes.includes(type.id))
     );
-    
+
     // Separate into mainstream and adult sources
     const mainstreamSources = filteredSources.filter(s => !s.adult);
     const adultSources = filteredSources.filter(s => s.adult);
-    
+
     const duration = Date.now() - startTime;
     log.api('GET', '/api/sources', 200, duration);
 
@@ -138,7 +138,7 @@ export async function GET(request) {
   } catch (error) {
     const duration = Date.now() - startTime;
     log.error(`Sources API error (${duration}ms):`, error.message);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch sources',

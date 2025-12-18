@@ -33,21 +33,21 @@ const startupCache = {
 async function primeCache() {
   if (startupCache.isRefreshing) return;
   startupCache.isRefreshing = true;
-  
+
   log.info('🔄 Priming startup cache...');
   const start = Date.now();
-  
+
   try {
     // Fetch popular manga for both SFW and adult modes in parallel
     const [sfwPopular, adultPopular] = await Promise.all([
       scrapers.getPopular({ includeAdult: false, page: 1 }).catch(() => []),
       scrapers.getPopular({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
     ]);
-    
+
     startupCache.popular.sfw = sfwPopular;
     startupCache.popular.adult = adultPopular;
     startupCache.lastRefresh = Date.now();
-    
+
     log.info(`✅ Startup cache primed in ${Date.now() - start}ms`, {
       sfw: sfwPopular.length,
       adult: adultPopular.length,
@@ -62,12 +62,12 @@ async function primeCache() {
 // Get cached data or trigger refresh
 function getCachedPopular(includeAdult) {
   const cache = includeAdult ? startupCache.popular.adult : startupCache.popular.sfw;
-  
+
   // Trigger background refresh if stale
   if (Date.now() - startupCache.lastRefresh > startupCache.REFRESH_INTERVAL) {
     primeCache(); // Non-blocking
   }
-  
+
   return cache;
 }
 
@@ -77,7 +77,7 @@ const CACHE_MAX_SIZE = 500; // Max cached images (increased for better performan
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // Configure helmet to allow cross-origin image loading
-app.use(helmet({ 
+app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginEmbedderPolicy: false,
@@ -99,7 +99,7 @@ function validateImageBuffer(buffer, contentType) {
   if (!buffer || buffer.length < 100) {
     return { valid: false, reason: 'too_small' };
   }
-  
+
   // Check content type
   if (contentType && !contentType.startsWith('image/')) {
     // Could be HTML error page
@@ -109,29 +109,29 @@ function validateImageBuffer(buffer, contentType) {
     }
     return { valid: false, reason: 'wrong_content_type' };
   }
-  
+
   // Check magic bytes for common image formats
   const magicBytes = buffer.slice(0, 16);
-  
+
   // JPEG: starts with FF D8 FF
   const isJpeg = magicBytes[0] === 0xFF && magicBytes[1] === 0xD8 && magicBytes[2] === 0xFF;
-  
+
   // PNG: starts with 89 50 4E 47 0D 0A 1A 0A
-  const isPng = magicBytes[0] === 0x89 && magicBytes[1] === 0x50 && 
-                magicBytes[2] === 0x4E && magicBytes[3] === 0x47;
-  
+  const isPng = magicBytes[0] === 0x89 && magicBytes[1] === 0x50 &&
+    magicBytes[2] === 0x4E && magicBytes[3] === 0x47;
+
   // GIF: starts with GIF87a or GIF89a
   const isGif = magicBytes[0] === 0x47 && magicBytes[1] === 0x49 && magicBytes[2] === 0x46;
-  
+
   // WebP: starts with RIFF....WEBP
-  const isWebp = magicBytes[0] === 0x52 && magicBytes[1] === 0x49 && 
-                 magicBytes[2] === 0x46 && magicBytes[3] === 0x46 &&
-                 magicBytes[8] === 0x57 && magicBytes[9] === 0x45 &&
-                 magicBytes[10] === 0x42 && magicBytes[11] === 0x50;
-  
+  const isWebp = magicBytes[0] === 0x52 && magicBytes[1] === 0x49 &&
+    magicBytes[2] === 0x46 && magicBytes[3] === 0x46 &&
+    magicBytes[8] === 0x57 && magicBytes[9] === 0x45 &&
+    magicBytes[10] === 0x42 && magicBytes[11] === 0x50;
+
   // BMP: starts with BM
   const isBmp = magicBytes[0] === 0x42 && magicBytes[1] === 0x4D;
-  
+
   if (!isJpeg && !isPng && !isGif && !isWebp && !isBmp) {
     // Check if it's HTML
     const text = buffer.toString('utf8', 0, Math.min(500, buffer.length));
@@ -140,7 +140,7 @@ function validateImageBuffer(buffer, contentType) {
     }
     return { valid: false, reason: 'invalid_magic_bytes' };
   }
-  
+
   return { valid: true };
 }
 
@@ -150,7 +150,7 @@ function getRefererForUrl(url) {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     const urlLower = url.toLowerCase();
-    
+
     // NHentai
     if (hostname.includes('nhentai') || hostname.includes('nhentaimg')) {
       return 'https://nhentai.xxx/';
@@ -169,12 +169,12 @@ function getRefererForUrl(url) {
     }
     // Bato.to - detect by CDN patterns (n##.xxx.org, s##.xxx.org, or /media/ path)
     if (hostname.match(/^[ns]\d+\.[a-z]+\.org$/) ||
-        hostname.match(/^xfs-[ns]\d+\.[a-z]+\.org$/) ||
-        hostname.includes('mbimg') || hostname.includes('mbuul') || 
-        hostname.includes('mbznp') || hostname.includes('mbcej') ||
-        hostname.includes('mbeaj') || hostname.includes('mbwnp') ||
-        hostname.includes('meo.org') || hostname.includes('bato') ||
-        urlLower.includes('/media/mb')) {
+      hostname.match(/^xfs-[ns]\d+\.[a-z]+\.org$/) ||
+      hostname.includes('mbimg') || hostname.includes('mbuul') ||
+      hostname.includes('mbznp') || hostname.includes('mbcej') ||
+      hostname.includes('mbeaj') || hostname.includes('mbwnp') ||
+      hostname.includes('meo.org') || hostname.includes('bato') ||
+      urlLower.includes('/media/mb')) {
       return 'https://bato.to/';
     }
     // MangaDex
@@ -222,7 +222,7 @@ app.options('/api/proxy/image', (req, res) => {
 // Fetch image with retry and different header sets
 async function fetchImageWithRetry(imageUrl, maxRetries = 3) {
   const referer = getRefererForUrl(imageUrl);
-  
+
   // Different header configurations to try
   const headerConfigs = [
     // Config 1: Full browser-like headers
@@ -255,28 +255,28 @@ async function fetchImageWithRetry(imageUrl, maxRetries = 3) {
       'Referer': referer,
     },
   ];
-  
+
   let lastError = null;
   let lastResponse = null;
-  
+
   for (let i = 0; i < headerConfigs.length; i++) {
     try {
-      const response = await fetch(imageUrl, { 
+      const response = await fetch(imageUrl, {
         headers: headerConfigs[i],
         redirect: 'follow',
       });
-      
+
       if (response.ok) {
         return response;
       }
-      
+
       lastResponse = response;
-      
+
       // If 503, try next config
       if (response.status === 503 || response.status === 403) {
         continue;
       }
-      
+
       // For other errors, return immediately
       return response;
     } catch (e) {
@@ -285,7 +285,7 @@ async function fetchImageWithRetry(imageUrl, maxRetries = 3) {
       continue;
     }
   }
-  
+
   // All configs failed, return last response or throw error
   if (lastResponse) return lastResponse;
   throw lastError || new Error('All fetch attempts failed');
@@ -295,9 +295,9 @@ async function fetchImageWithRetry(imageUrl, maxRetries = 3) {
 app.get('/api/proxy/image', async (req, res) => {
   // Set CORS headers first thing
   setImageCorsHeaders(res);
-  
+
   const imageUrl = req.query.url;
-  
+
   if (!imageUrl) {
     log.warn('Image proxy missing URL parameter');
     return res.status(400).send('Missing url parameter');
@@ -320,10 +320,10 @@ app.get('/api/proxy/image', async (req, res) => {
     if (!response.ok) {
       const extensions = ['.webp', '.jpg', '.png', '.gif'];
       const currentExt = imageUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)?.[0] || '';
-      
+
       for (const ext of extensions) {
         if (ext === currentExt.toLowerCase()) continue;
-        
+
         const altUrl = imageUrl.replace(/\.(jpg|jpeg|png|gif|webp)$/i, ext);
         try {
           const altResponse = await fetchImageWithRetry(altUrl);
@@ -341,10 +341,10 @@ app.get('/api/proxy/image', async (req, res) => {
 
     if (!response.ok) {
       const source = new URL(imageUrl).hostname.split('.').slice(-2, -1)[0] || 'unknown';
-      log.error('Image proxy fetch failed', { 
-        status: response.status, 
+      log.error('Image proxy fetch failed', {
+        status: response.status,
         source,
-        url: imageUrl.substring(0, 100) 
+        url: imageUrl.substring(0, 100)
       });
       return res.status(response.status).send('Failed to fetch image');
     }
@@ -356,17 +356,17 @@ app.get('/api/proxy/image', async (req, res) => {
     const isValidImage = validateImageBuffer(buffer, contentType);
     if (!isValidImage.valid) {
       const source = new URL(imageUrl).hostname.split('.').slice(-2, -1)[0] || 'unknown';
-      log.error('🖼️ INVALID IMAGE', { 
+      log.error('🖼️ INVALID IMAGE', {
         reason: isValidImage.reason,
         source,
         size: buffer.length,
         contentType,
         url: imageUrl.substring(0, 100)
       });
-      return res.status(422).json({ 
-        error: 'Invalid image', 
+      return res.status(422).json({
+        error: 'Invalid image',
         reason: isValidImage.reason,
-        source 
+        source
       });
     }
 
@@ -377,7 +377,7 @@ app.get('/api/proxy/image', async (req, res) => {
         .slice(0, 20);
       oldest.forEach(([key]) => imageCache.delete(key));
     }
-    
+
     imageCache.set(imageUrl, {
       data: buffer,
       contentType,
@@ -398,16 +398,16 @@ app.get('/api/proxy/image', async (req, res) => {
 // Report failed image from client (manga reader)
 app.post('/api/report/image-fail', express.json(), (req, res) => {
   const { url, mangaId, chapterId, page, error } = req.body;
-  
+
   if (!url) {
     return res.status(400).json({ error: 'Missing url' });
   }
-  
+
   try {
     const hostname = new URL(url).hostname;
     const source = hostname.split('.').slice(-2, -1)[0] || 'unknown';
-    
-    log.error('🖼️ CLIENT IMAGE FAIL', { 
+
+    log.error('🖼️ CLIENT IMAGE FAIL', {
       source,
       mangaId: mangaId || 'unknown',
       chapterId: chapterId || 'unknown',
@@ -415,7 +415,7 @@ app.post('/api/report/image-fail', express.json(), (req, res) => {
       error: error || 'load error',
       url: url.substring(0, 120)
     });
-    
+
     res.json({ reported: true });
   } catch (e) {
     log.error('Failed to report image', { error: e.message });
@@ -428,13 +428,13 @@ app.get('/api/sources', (req, res) => {
   const includeAdult = req.query.adult === 'true';
   const adultOnly = req.query.adultOnly === 'true';
   const allSources = scrapers.getSources(includeAdult, adultOnly);
-  
+
   // Build content types list from sources
   const contentTypeSet = new Set();
   allSources.forEach(s => {
     (s.contentTypes || ['manga']).forEach(t => contentTypeSet.add(t));
   });
-  
+
   const contentTypes = [
     { id: 'manga', name: 'Manga', description: 'Japanese comics' },
     { id: 'manhwa', name: 'Manhwa', description: 'Korean comics' },
@@ -448,7 +448,7 @@ app.get('/api/sources', (req, res) => {
     { id: 'comic', name: 'Comic', description: 'General comics' },
     { id: 'oneshot', name: 'One-shot', description: 'Single chapter works' },
   ].filter(t => contentTypeSet.has(t.id));
-  
+
   res.json({
     sources: allSources,
     enabled: scrapers.getEnabledSources(includeAdult, adultOnly).map(s => s.id),
@@ -475,8 +475,8 @@ app.get('/api/tags', async (req, res) => {
 app.get('/api/manga/search', async (req, res) => {
   const startTime = Date.now();
   try {
-    const { 
-      q = '', 
+    const {
+      q = '',
       sources: sourceIds,
       adult = 'false',
       status,
@@ -489,7 +489,7 @@ app.get('/api/manga/search', async (req, res) => {
     // adult=false → safe only, adult=true → all, adult=only → 18+ only
     const isAdultOnly = adult === 'only';
     const includeAdult = adult === 'true' || isAdultOnly;
-    
+
     const options = {
       sourceIds: sourceIds ? sourceIds.split(',') : null,
       includeAdult,
@@ -504,10 +504,10 @@ app.get('/api/manga/search', async (req, res) => {
     log.debug('Search request', { query: q, sources: sourceIds, adult, status, sort, page });
 
     let data;
-    
+
     // For initial page load (no query, no filters, page 1), use startup cache for instant response
     const isInitialLoad = !q && !sourceIds && !tags && !exclude && page === '1' && sort === 'popular';
-    
+
     if (isInitialLoad) {
       const cached = getCachedPopular(includeAdult);
       if (cached && cached.length > 0) {
@@ -515,10 +515,10 @@ app.get('/api/manga/search', async (req, res) => {
         log.info('⚡ Instant response from startup cache', { results: data.length, duration: Date.now() - startTime });
       }
     }
-    
+
     // If no cache hit, fetch from sources
     if (!data) {
-      data = q 
+      data = q
         ? await scrapers.search(q, options)
         : await scrapers.getPopular(options);
     }
@@ -528,8 +528,8 @@ app.get('/api/manga/search', async (req, res) => {
       const beforeFilter = data.length;
       data = data.filter(m => {
         const mangaStatus = (m.status || '').toLowerCase();
-        return mangaStatus === status.toLowerCase() || 
-               mangaStatus.includes(status.toLowerCase());
+        return mangaStatus === status.toLowerCase() ||
+          mangaStatus.includes(status.toLowerCase());
       });
       log.debug(`Status filter applied`, { status, before: beforeFilter, after: data.length });
     }
@@ -544,7 +544,7 @@ app.get('/api/manga/search', async (req, res) => {
     }
 
     const duration = Date.now() - startTime;
-    
+
     if (data.length === 0) {
       log.warn('Search returned no results', { query: q, sources: sourceIds, adult, duration });
     } else {
@@ -564,9 +564,11 @@ app.get('/api/manga/popular', async (req, res) => {
   const startTime = Date.now();
   try {
     const { sources: sourceIds, adult = 'false', page = '1', tags, exclude } = req.query;
+    const isAdultOnly = adult === 'only';
     const data = await scrapers.getPopular({
       sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true',
+      includeAdult: adult === 'true' || isAdultOnly,
+      adultOnly: isAdultOnly,
       page: parseInt(page, 10),
       tags: tags ? tags.split(',') : [],
       excludeTags: exclude ? exclude.split(',') : [],
@@ -589,9 +591,11 @@ app.get('/api/manga/latest', async (req, res) => {
   const startTime = Date.now();
   try {
     const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
+    const isAdultOnly = adult === 'only';
     const data = await scrapers.getLatest({
       sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true',
+      includeAdult: adult === 'true' || isAdultOnly,
+      adultOnly: isAdultOnly,
       page: parseInt(page, 10),
     });
     const duration = Date.now() - startTime;
@@ -612,9 +616,11 @@ app.get('/api/manga/new', async (req, res) => {
   const startTime = Date.now();
   try {
     const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
+    const isAdultOnly = adult === 'only';
     const data = await scrapers.getNewlyAdded({
       sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true',
+      includeAdult: adult === 'true' || isAdultOnly,
+      adultOnly: isAdultOnly,
       page: parseInt(page, 10),
     });
     const duration = Date.now() - startTime;
@@ -633,9 +639,11 @@ app.get('/api/manga/top-rated', async (req, res) => {
   const startTime = Date.now();
   try {
     const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
+    const isAdultOnly = adult === 'only';
     const data = await scrapers.getTopRated({
       sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true',
+      includeAdult: adult === 'true' || isAdultOnly,
+      adultOnly: isAdultOnly,
       page: parseInt(page, 10),
     });
     const duration = Date.now() - startTime;
@@ -656,12 +664,12 @@ app.get('/api/manga/:id(*)', async (req, res) => {
   try {
     const data = await scrapers.getMangaDetails(id);
     const duration = Date.now() - startTime;
-    
+
     if (!data) {
       log.warn('Manga not found', { id, duration });
       return res.status(404).json({ error: 'Not found', id });
     }
-    
+
     log.api('GET', `/api/manga/${id}`, 200, duration, { title: data.title?.substring(0, 30) });
     res.json(data);
   } catch (e) {
@@ -678,7 +686,7 @@ app.get('/api/chapters/:mangaId(*)', async (req, res) => {
   try {
     const data = await scrapers.getChapters(mangaId);
     const duration = Date.now() - startTime;
-    
+
     if (!data || data.length === 0) {
       log.warn('No chapters found', { mangaId, duration });
     } else {
@@ -698,7 +706,7 @@ app.get('/api/pages/:mangaId(*)/:chapterId', async (req, res) => {
   try {
     const pages = await scrapers.getChapterPages(chapterId, mangaId);
     const duration = Date.now() - startTime;
-    
+
     if (!pages || pages.length === 0) {
       log.warn('No pages found', { mangaId, chapterId, duration });
     } else {
@@ -722,7 +730,7 @@ app.get('/api/og/:mangaId(*)', async (req, res) => {
         image: '/og-image.png',
       });
     }
-    
+
     res.json({
       title: `${manga.title} - MangaFox`,
       description: manga.description?.slice(0, 200) || `Read ${manga.title} online for free on MangaFox.`,
@@ -741,10 +749,10 @@ app.get('/api/og/:mangaId(*)', async (req, res) => {
 app.listen(PORT, () => {
   log.info(`API server started`, { port: PORT, url: `http://localhost:${PORT}` });
   log.info('Available sources:', Object.keys(scrapers.sources || {}).join(', '));
-  
+
   // Prime cache immediately on startup for instant first load
   primeCache();
-  
+
   // Periodically refresh cache to keep it warm
   setInterval(primeCache, startupCache.REFRESH_INTERVAL);
 });

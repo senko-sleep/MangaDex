@@ -61,7 +61,7 @@ export const sources = {
     id: 'mangadex',
     name: 'MangaDex',
     icon: '🔷',
-    isAdult: false,
+    isAdult: null,
     enabled: true,
     description: 'Official API, reliable',
     contentTypes: ['manga', 'manhwa', 'manhua', 'oneshot'],
@@ -154,10 +154,10 @@ export const sources = {
   bato: {
     id: 'bato',
     name: 'Bato.to',
-    icon: '📖',
+    icon: '📚',
     isAdult: false,
     enabled: true,
-    description: 'Large manga library with multiple languages',
+    description: 'Manga reader with multiple sources',
     contentTypes: ['manga', 'manhwa', 'manhua', 'webtoon'],
     filters: {
       tags: true,
@@ -214,9 +214,9 @@ const parseSmartQuery = (query) => {
     tags: [],
     excludeTags: [],
   };
-  
+
   if (!query) return result;
-  
+
   // Match patterns like artist:name, tag:name, -tag:name, etc.
   // Supports quoted values: artist:"name with spaces"
   const patterns = [
@@ -233,15 +233,15 @@ const parseSmartQuery = (query) => {
     { regex: /female:(?:"([^"]+)"|(\S+))/gi, field: 'tag', prefix: 'female:' },
     { regex: /male:(?:"([^"]+)"|(\S+))/gi, field: 'tag', prefix: 'male:' },
   ];
-  
+
   let cleanQuery = query;
-  
+
   for (const { regex, field, prefix = '' } of patterns) {
     let match;
     while ((match = regex.exec(query)) !== null) {
       const value = (match[1] || match[2]).trim();
       cleanQuery = cleanQuery.replace(match[0], '').trim();
-      
+
       if (field === 'tag') {
         result.tags.push(prefix + value);
       } else if (field === 'excludeTag') {
@@ -251,18 +251,18 @@ const parseSmartQuery = (query) => {
       }
     }
   }
-  
+
   // Clean up extra spaces
   result.cleanQuery = cleanQuery.replace(/\s+/g, ' ').trim();
-  
+
   return result;
 };
 
 // Search across sources - optimized with timeouts
 export async function search(query, options = {}) {
-  const { 
-    sourceIds = null, 
-    includeAdult = false, 
+  const {
+    sourceIds = null,
+    includeAdult = false,
     adultOnly = false,
     page = 1,
     tags = [],
@@ -275,7 +275,7 @@ export async function search(query, options = {}) {
   const parsed = parseSmartQuery(query);
   const effectiveTags = [...tags, ...parsed.tags];
   const effectiveExcludeTags = [...excludeTags, ...parsed.excludeTags];
-  
+
   // Add artist/group/parody as tags for sources that support them
   if (parsed.artist) effectiveTags.push(`artist:${parsed.artist}`);
   if (parsed.group) effectiveTags.push(`group:${parsed.group}`);
@@ -285,7 +285,7 @@ export async function search(query, options = {}) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const targetSources = sourceIds 
+  const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
     : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
@@ -298,12 +298,12 @@ export async function search(query, options = {}) {
         // Pass parsed query and tags to scraper
         const data = await withTimeout(
           scraper.search(
-            parsed.cleanQuery, 
-            page, 
-            includeAdult || adultOnly, 
-            effectiveTags, 
-            effectiveExcludeTags, 
-            status, 
+            parsed.cleanQuery,
+            page,
+            includeAdult || adultOnly,
+            effectiveTags,
+            effectiveExcludeTags,
+            status,
             adultOnly,
             parsed.language, // Pass language for sources that support it
             sort // Pass sort option to scraper
@@ -334,7 +334,7 @@ export async function getPopular(options = {}) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const targetSources = sourceIds 
+  const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
     : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
@@ -343,7 +343,7 @@ export async function getPopular(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly, sort), getTimeoutForSource(sourceId));
+        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly, sort, adultOnly), getTimeoutForSource(sourceId));
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
@@ -367,7 +367,7 @@ export async function getLatest(options = {}) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const targetSources = sourceIds 
+  const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
     : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
@@ -376,7 +376,7 @@ export async function getLatest(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly), getTimeoutForSource(sourceId));
+        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly, adultOnly), getTimeoutForSource(sourceId));
         return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
@@ -394,21 +394,21 @@ export async function getLatest(options = {}) {
 
 // Get newly added manga
 export async function getNewlyAdded(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1 } = options;
 
   const cacheKey = `newlyAdded:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const targetSources = sourceIds 
+  const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        const data = await scraper.getNewlyAdded(page, includeAdult);
+        const data = await scraper.getNewlyAdded(page, includeAdult || adultOnly, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] NewlyAdded error:`, e.message);
@@ -427,21 +427,21 @@ export async function getNewlyAdded(options = {}) {
 
 // Get top rated manga
 export async function getTopRated(options = {}) {
-  const { sourceIds = null, includeAdult = false, page = 1 } = options;
+  const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1 } = options;
 
   const cacheKey = `topRated:${JSON.stringify(options)}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const targetSources = sourceIds 
+  const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
-    : getEnabledSources(includeAdult).map(s => s.id);
+    : getEnabledSources(includeAdult || adultOnly, adultOnly).map(s => s.id);
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       try {
         const scraper = scrapers[sourceId];
-        const data = await scraper.getTopRated(page, includeAdult);
+        const data = await scraper.getTopRated(page, includeAdult || adultOnly, adultOnly);
         return data.map(m => ({ ...m, sourceId }));
       } catch (e) {
         console.error(`[${sourceId}] TopRated error:`, e.message);
@@ -467,7 +467,7 @@ export async function getMangaDetails(id) {
   // Parse source from ID (format: source:slug)
   const [sourceId] = id.split(':');
   const scraper = scrapers[sourceId];
-  
+
   if (!scraper) {
     throw new Error(`Unknown source: ${sourceId}`);
   }
@@ -487,7 +487,7 @@ export async function getChapters(mangaId) {
 
   const [sourceId] = mangaId.split(':');
   const scraper = scrapers[sourceId];
-  
+
   if (!scraper) {
     throw new Error(`Unknown source: ${sourceId}`);
   }
@@ -505,7 +505,7 @@ export async function getChapterPages(chapterId, mangaId) {
 
   const [sourceId] = mangaId.split(':');
   const scraper = scrapers[sourceId];
-  
+
   if (!scraper) {
     throw new Error(`Unknown source: ${sourceId}`);
   }
@@ -518,24 +518,24 @@ export async function getChapterPages(chapterId, mangaId) {
 // Get tags for specific sources (cached for 1 hour)
 export async function getTagsForSources(sourceIds = null, includeAdult = false) {
   // If no specific sources, get all enabled sources
-  const targetSourceIds = sourceIds && sourceIds.length > 0 
-    ? sourceIds 
+  const targetSourceIds = sourceIds && sourceIds.length > 0
+    ? sourceIds
     : getEnabledSources(includeAdult).map(s => s.id);
-  
+
   const cacheKey = `tags:${targetSourceIds.sort().join(',')}:${includeAdult}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const tagsBySource = {};
   const allTagsSet = new Set();
-  
+
   for (const sourceId of targetSourceIds) {
     const scraper = scrapers[sourceId];
     const source = sources[sourceId];
-    
+
     if (!scraper || !source) continue;
     if (!includeAdult && source.isAdult) continue;
-    
+
     try {
       const tags = await scraper.getTags();
       if (Array.isArray(tags)) {

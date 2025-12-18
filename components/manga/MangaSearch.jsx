@@ -8,7 +8,7 @@ import { MangaGrid } from './MangaGrid';
 export function MangaSearch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
-  
+
   const { results, loading, error, pagination } = useSearchManga(activeSearch, {
     page: 1,
     language: 'english',

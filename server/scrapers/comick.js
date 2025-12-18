@@ -52,7 +52,7 @@ export class ComickScraper extends BaseScraper {
     const cover = m.md_covers?.[0]?.b2key;
     const contentRating = m.content_rating;
     const isAdult = contentRating === 'erotica' || contentRating === 'pornographic' || contentRating === 'suggestive';
-    
+
     return {
       id: `comick:${m.slug || m.hid}`,
       sourceId: 'comick',

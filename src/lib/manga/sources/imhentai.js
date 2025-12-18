@@ -52,7 +52,8 @@ class IMHentaiSource extends BaseSource {
       limit = 24, 
       page = 1, 
       category = 'all',
-      type = 'all'
+      type = 'all',
+      existingIds = new Set()
     } = options;
     
     try {
@@ -71,12 +72,23 @@ class IMHentaiSource extends BaseSource {
       
       console.log('[IMHentai] Searching:', url);
       const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      let galleries = this.parseGalleryList(html);
       
-      return galleries.slice(0, limit);
+      // Filter out duplicates using existingIds
+      galleries = galleries.filter(gallery => !existingIds.has(gallery.id));
+      
+      // Add new IDs to the set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
+      
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: galleries.length >= 24, // IMHentai shows 24 results per page
+        nextPage: page + 1
+      };
     } catch (error) {
+      console.error('[IMHentai] Search failed:', error);
       this.log.warn('IMHentai search failed', { query, error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 
@@ -85,25 +97,62 @@ class IMHentaiSource extends BaseSource {
       limit = 24, 
       page = 1, 
       category = 'all',
-      type = 'all' 
+      type = 'all',
+      existingIds = new Set()
     } = options;
     
     try {
-      let url = `${this.baseUrl}/popular/?page=${page}`;
+      // Try multiple possible popular URLs
+      const possiblePaths = [
+        '/popular/',
+        '/popular/all/',
+        '/popular/all/popular/' // Some sites use this pattern
+      ];
       
       const cat = category !== 'all' ? category : type;
-      if (cat !== 'all' && CATEGORY_IDS[cat]) {
-        url = `${this.baseUrl}/${cat}/popular/?page=${page}`;
+      let galleries = [];
+      
+      for (const path of possiblePaths) {
+        try {
+          let url = `${this.baseUrl}${path}?page=${page}`;
+          
+          if (cat !== 'all' && CATEGORY_IDS[cat]) {
+            url = `${this.baseUrl}/${cat}${path}?page=${page}`;
+          }
+          
+          console.log('[IMHentai] Fetching popular from:', url);
+          const html = await this.fetchHtml(url);
+          const newGalleries = this.parseGalleryList(html);
+          
+          // Add only new galleries to avoid duplicates
+          const existingIdsSet = new Set([...existingIds, ...galleries.map(g => g.id)]);
+          newGalleries.forEach(g => {
+            if (!existingIdsSet.has(g.id)) {
+              galleries.push(g);
+              existingIdsSet.add(g.id);
+            }
+          });
+          
+          // If we have enough results, no need to try other URLs
+          if (galleries.length >= limit) break;
+        } catch (error) {
+          console.warn(`[IMHentai] Failed to fetch from path: ${path}`, error.message);
+          // Continue to next path
+        }
       }
       
-      console.log('[IMHentai] Fetching popular:', url);
-      const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      // Add all new IDs to the existingIds set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
       
-      return galleries.slice(0, limit);
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: galleries.length >= 24, // IMHentai shows 24 results per page
+        nextPage: page + 1
+      };
     } catch (error) {
+      console.error('[IMHentai] Popular fetch failed:', error);
       this.log.warn('IMHentai popular failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 
@@ -112,25 +161,66 @@ class IMHentaiSource extends BaseSource {
       limit = 24, 
       page = 1, 
       category = 'all',
-      type = 'all'
+      type = 'all',
+      existingIds = new Set()
     } = options;
     
     try {
-      let url = `${this.baseUrl}/?page=${page}`;
+      // Try multiple possible latest URLs
+      const possiblePaths = [
+        '/',
+        '/latest/',
+        '/latest/all/',
+        '/g/'  // Some sites use this as the root for latest
+      ];
       
       const cat = category !== 'all' ? category : type;
-      if (cat !== 'all') {
-        url = `${this.baseUrl}/${cat}/?page=${page}`;
+      let galleries = [];
+      
+      for (const path of possiblePaths) {
+        try {
+          let url = `${this.baseUrl}${path}${path.endsWith('/') ? '' : '/'}?page=${page}`;
+          
+          if (cat !== 'all' && CATEGORY_IDS[cat]) {
+            url = `${this.baseUrl}/${cat}${path}?page=${page}`;
+          }
+          
+          console.log('[IMHentai] Fetching latest from:', url);
+          const html = await this.fetchHtml(url);
+          const newGalleries = this.parseGalleryList(html);
+          
+          // Add only new galleries to avoid duplicates
+          const existingIdsSet = new Set([...existingIds, ...galleries.map(g => g.id)]);
+          newGalleries.forEach(g => {
+            if (!existingIdsSet.has(g.id)) {
+              galleries.push(g);
+              existingIdsSet.add(g.id);
+            }
+          });
+          
+          // If we have enough results, no need to try other URLs
+          if (galleries.length >= limit) break;
+        } catch (error) {
+          console.warn(`[IMHentai] Failed to fetch latest from path: ${path}`, error.message);
+          // Continue to next path
+        }
       }
       
-      console.log('[IMHentai] Fetching latest:', url);
-      const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      // Sort by ID in descending order (newest first)
+      galleries.sort((a, b) => parseInt(b.id) - parseInt(a.id));
       
-      return galleries.slice(0, limit);
+      // Add all new IDs to the existingIds set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
+      
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: galleries.length >= 24, // IMHentai shows 24 results per page
+        nextPage: page + 1
+      };
     } catch (error) {
+      console.error('[IMHentai] Latest fetch failed:', error);
       this.log.warn('IMHentai latest failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 
@@ -219,60 +309,83 @@ class IMHentaiSource extends BaseSource {
   parseGalleryList(html) {
     const results = [];
     
-    // Match gallery cards
-    const galleryRegex = /<div[^>]*class="[^"]*thumb[^"]*"[^>]*>([\s\S]*?)<\/a>\s*<\/div>/gi;
-    const linkRegex = /href="\/gallery\/(\d+)\/?"/i;
-    const titleRegex = /class="[^"]*caption[^"]*"[^>]*>([^<]+)<\/|title="([^"]+)"/i;
-    const thumbRegex = /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i;
-    const categoryRegex = /<span[^>]*class="[^"]*cat[^"]*"[^>]*>([^<]+)<\/span>/i;
-    const pagesRegex = /(\d+)\s*(?:P|pages|page)/i;
-    
-    let match;
-    while ((match = galleryRegex.exec(html)) !== null) {
-      const content = match[1];
-      const linkMatch = linkRegex.exec(content);
-      
-      if (linkMatch) {
-        const id = linkMatch[1];
-        const titleMatch = titleRegex.exec(content);
-        const thumbMatch = thumbRegex.exec(content);
-        const categoryMatch = categoryRegex.exec(content);
-        const pagesMatch = pagesRegex.exec(content);
-        
-        const category = (categoryMatch?.[1] || 'doujinshi').toLowerCase().trim();
-        
-        results.push(this.formatManga({
-          id,
-          title: this.decodeHtml((titleMatch?.[1] || titleMatch?.[2] || `Gallery ${id}`).trim()),
-          coverUrl: thumbMatch ? thumbMatch[1] : '',
-          genres: [category],
-          type: category,
-          pages: pagesMatch ? parseInt(pagesMatch[1]) : 0,
-          adult: true
-        }));
+    // Try multiple gallery item patterns to handle different layouts
+    const patterns = [
+      // Modern grid layout
+      {
+        regex: /<div[^>]*class="[^"]*thumb[^"]*"[^>]*>([\s\S]*?)<\/a>/gi,
+        link: /href="\/gallery\/(\d+)\/?"/i,
+        title: /class="[^"]*caption[^"]*"[^>]*>([^<]+)<\/|title="([^"]+)"/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<span[^>]*class="[^"]*cat[^"]*"[^>]*>([^<]+)<\/span>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
+      },
+      // Alternative grid layout
+      {
+        regex: /<article[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+        link: /href="\/gallery\/(\d+)\/?"/i,
+        title: /class="[^"]*caption[^"]*"[^>]*>([^<]+)<\/|title="([^"]+)"/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<span[^>]*class="[^"]*type[^"]*"[^>]*>([^<]+)<\/span>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
+      },
+      // List layout
+      {
+        regex: /<tr[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi,
+        link: /href="\/gallery\/(\d+)\/?"/i,
+        title: /class="[^"]*title[^"]*"[^>]*>([^<]+)<\/a>/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<span[^>]*class="[^"]*category[^"]*"[^>]*>([^<]+)<\/span>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
       }
-    }
-    
-    // Fallback pattern for different layouts
-    if (results.length === 0) {
-      const altRegex = /<article[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-      while ((match = altRegex.exec(html)) !== null) {
+    ];
+
+    for (const pattern of patterns) {
+      const { regex, link, title, thumb, category, pages } = pattern;
+      let match;
+      
+      while ((match = regex.exec(html)) !== null) {
         const content = match[1];
-        const linkMatch = linkRegex.exec(content);
+        const linkMatch = link.exec(content);
         
         if (linkMatch) {
           const id = linkMatch[1];
-          const titleMatch = titleRegex.exec(content);
-          const thumbMatch = thumbRegex.exec(content);
+          const titleMatch = title.exec(content);
+          const thumbMatch = thumb.exec(content);
+          const categoryMatch = category?.exec(content);
+          const pagesMatch = pages?.exec(content);
+          
+          // Skip if we already have this gallery
+          if (results.some(r => r.id === id)) continue;
+          
+          const cat = (categoryMatch?.[1] || 'doujinshi').toLowerCase().trim();
+          
+          // Process thumbnail URL - ensure it's absolute
+          let coverUrl = thumbMatch ? thumbMatch[1] : '';
+          if (coverUrl && !coverUrl.startsWith('http')) {
+            if (coverUrl.startsWith('//')) {
+              coverUrl = 'https:' + coverUrl;
+            } else if (coverUrl.startsWith('/')) {
+              coverUrl = this.baseUrl + coverUrl;
+            } else {
+              coverUrl = this.baseUrl + '/' + coverUrl;
+            }
+          }
           
           results.push(this.formatManga({
             id,
             title: this.decodeHtml((titleMatch?.[1] || titleMatch?.[2] || `Gallery ${id}`).trim()),
-            coverUrl: thumbMatch ? thumbMatch[1] : '',
+            coverUrl,
+            genres: [cat],
+            type: cat,
+            pages: pagesMatch ? parseInt(pagesMatch[1]) : 0,
             adult: true
           }));
         }
       }
+      
+      // If we found results with this pattern, no need to try others
+      if (results.length > 0) break;
     }
     
     return results;
@@ -366,36 +479,86 @@ class IMHentaiSource extends BaseSource {
   parseGalleryPages(html, galleryId) {
     const pages = [];
     
-    // IMHentai embeds page info in hidden inputs:
-    // load_server, load_dir, load_id, load_pages
-    const serverMatch = /id=['"]load_server['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
-    const dirMatch = /id=['"]load_dir['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
-    const loadIdMatch = /id=['"]load_id['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
-    const pagesMatch = /id=['"]load_pages['"][^>]*value=['"]([^'"]*)['"]/i.exec(html);
+    // Try multiple patterns to extract page information
+    const patterns = [
+      // Standard hidden inputs
+      {
+        server: /id=['"]load_server['"][^>]*value=['"]([^'"]*)['"]/i,
+        dir: /id=['"]load_dir['"][^>]*value=['"]([^'"]*)['"]/i,
+        loadId: /id=['"]load_id['"][^>]*value=['"]([^'"]*)['"]/i,
+        pages: /id=['"]load_pages['"][^>]*value=['"]([^'"]*)['"]/i,
+      },
+      // Alternative pattern for some sites
+      {
+        server: /var\s+load_server\s*=\s*['"]([^'"]*)['"]/i,
+        dir: /var\s+load_dir\s*=\s*['"]([^'"]*)['"]/i,
+        loadId: /var\s+load_id\s*=\s*['"]([^'"]*)['"]/i,
+        pages: /var\s+load_pages\s*=\s*(\d+)/i,
+      },
+      // Another common pattern
+      {
+        server: /"server":\s*"([^"]*)"/i,
+        dir: /"dir":\s*"([^"]*)"/i,
+        loadId: /"id":\s*"([^"]*)"/i,
+        pages: /"pages":\s*(\d+)/i,
+      }
+    ];
+
+    let server, dir, loadId, totalPages;
     
-    const server = serverMatch ? serverMatch[1] : null;
-    const dir = dirMatch ? dirMatch[1] : null;
-    const loadId = loadIdMatch ? loadIdMatch[1] : null;
-    const totalPages = pagesMatch ? parseInt(pagesMatch[1]) : 0;
+    // Try each pattern until we find one that works
+    for (const pattern of patterns) {
+      try {
+        const serverMatch = pattern.server.exec(html);
+        const dirMatch = pattern.dir.exec(html);
+        const loadIdMatch = pattern.loadId.exec(html);
+        const pagesMatch = pattern.pages.exec(html);
+        
+        if (serverMatch && dirMatch && loadIdMatch && pagesMatch) {
+          server = serverMatch[1];
+          dir = dirMatch[1];
+          loadId = loadIdMatch[1];
+          totalPages = parseInt(pagesMatch[1]);
+          break;
+        }
+      } catch (error) {
+        console.warn('[IMHentai] Error parsing page info with pattern:', error);
+      }
+    }
     
     if (server && dir && loadId && totalPages > 0) {
-      // Extract extension from first thumbnail
-      // Note: Thumbnails use .jpg but full images may be .webp
-      // We'll use .jpg as default and let the proxy handle fallback
-      const thumbMatch = /class=['"][^'"]*gthumb[^'"]*['"][^>]*>[\s\S]*?<img[^>]*data-src=['"]([^'"]*)['"]/i.exec(html);
-      let ext = 'jpg';
+      // Try to determine the image extension
+      const extPatterns = [
+        /<img[^>]*data-src=['"][^'"]*?\.(jpg|jpeg|png|gif|webp)/i,
+        /<img[^>]*src=['"][^'"]*?\.(jpg|jpeg|png|gif|webp)/i,
+        /<img[^>]*data-original=['"][^'"]*?\.(jpg|jpeg|png|gif|webp)/i
+      ];
       
-      // Check if thumbnail indicates webp (some galleries use webp thumbnails)
-      if (thumbMatch && thumbMatch[1]) {
-        const thumbExt = thumbMatch[1].match(/\.(\w+)$/);
-        if (thumbExt && thumbExt[1] === 'webp') {
-          ext = 'webp';
+      let ext = 'jpg';
+      for (const pattern of extPatterns) {
+        const match = pattern.exec(html);
+        if (match && match[1]) {
+          ext = match[1].toLowerCase();
+          break;
         }
       }
       
       // Build all page URLs using the pattern
       for (let i = 1; i <= totalPages; i++) {
-        const fullUrl = `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`;
+        // Try multiple URL patterns as different sites may use different formats
+        const urlPatterns = [
+          `https://m${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`,
+          `https://${server}.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`,
+          `https://m1.imhentai.xxx/${dir}/${loadId}/${i}.${ext}`,
+          `https://imhentai.xxx/${dir}/${loadId}/${i}.${ext}`
+        ];
+        
+        // Add all possible URLs and let the proxy handle fallback
+        pages.push({
+          index: i,
+          url: urlPatterns[0], // Primary URL
+          fallbackUrls: urlPatterns.slice(1) // Fallback URLs if primary fails
+        });
         pages.push({
           index: i,
           url: fullUrl

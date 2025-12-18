@@ -78,7 +78,8 @@ class EHentaiSource extends BaseSource {
       limit = 24, 
       page = 0, 
       category = 'all',
-      minimumRating = 0
+      minimumRating = 0,
+      existingIds = new Set()
     } = options;
     
     try {
@@ -95,17 +96,32 @@ class EHentaiSource extends BaseSource {
       }
       
       const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      let galleries = this.parseGalleryList(html);
       
-      return galleries.slice(0, limit);
+      // Filter out duplicates using existingIds
+      galleries = galleries.filter(gallery => !existingIds.has(gallery.id));
+      
+      // Add new IDs to the set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
+      
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: galleries.length >= 25, // E-Hentai shows 25 results per page
+        nextPage: page + 1
+      };
     } catch (error) {
+      console.error('[E-Hentai] Search failed:', error);
       this.log.warn('E-Hentai search failed', { query, error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 
   async getPopular(options = {}) {
-    const { limit = 24, category = 'all' } = options;
+    const { 
+      limit = 24, 
+      category = 'all',
+      existingIds = new Set()
+    } = options;
     
     try {
       // E-Hentai popular page
@@ -117,17 +133,33 @@ class EHentaiSource extends BaseSource {
       }
       
       const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      let galleries = this.parseGalleryList(html);
       
-      return galleries.slice(0, limit);
+      // Filter out duplicates using existingIds
+      galleries = galleries.filter(gallery => !existingIds.has(gallery.id));
+      
+      // Add new IDs to the set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
+      
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: false, // Popular page is a single page
+        nextPage: null
+      };
     } catch (error) {
+      console.error('[E-Hentai] Popular fetch failed:', error);
       this.log.warn('E-Hentai popular failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: null };
     }
   }
 
   async getLatest(options = {}) {
-    const { limit = 24, page = 0, category = 'all' } = options;
+    const { 
+      limit = 24, 
+      page = 0, 
+      category = 'all',
+      existingIds = new Set()
+    } = options;
     
     try {
       let url = `${this.baseUrl}/?page=${page}`;
@@ -138,12 +170,23 @@ class EHentaiSource extends BaseSource {
       }
       
       const html = await this.fetchHtml(url);
-      const galleries = this.parseGalleryList(html);
+      let galleries = this.parseGalleryList(html);
       
-      return galleries.slice(0, limit);
+      // Filter out duplicates using existingIds
+      galleries = galleries.filter(gallery => !existingIds.has(gallery.id));
+      
+      // Add new IDs to the set
+      galleries.forEach(gallery => existingIds.add(gallery.id));
+      
+      return { 
+        results: galleries.slice(0, limit),
+        hasMore: galleries.length >= 25, // E-Hentai shows 25 results per page
+        nextPage: page + 1
+      };
     } catch (error) {
+      console.error('[E-Hentai] Latest fetch failed:', error);
       this.log.warn('E-Hentai latest failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 

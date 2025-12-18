@@ -3,7 +3,7 @@ import BaseScraper from './base.js';
 // MangaSee123 - Very reliable, fast, good quality
 export class MangaSeeScraper extends BaseScraper {
   constructor() {
-  // MangaSee moved to manga4life.com
+    // MangaSee moved to manga4life.com
     super('MangaSee', 'https://manga4life.com', false);
     this.searchCache = null;
     this.searchCacheTime = 0;
@@ -31,14 +31,14 @@ export class MangaSeeScraper extends BaseScraper {
           }
         });
         const html = res.data;
-        
+
         // Look for vm.Directory = [...] in the page
         let match = html.match(/vm\.Directory\s*=\s*(\[[\s\S]*?\]);/);
         if (!match) {
           // Try alternative pattern
           match = html.match(/Directory\s*=\s*(\[[\s\S]*?\]);/);
         }
-        
+
         if (match) {
           const directory = JSON.parse(match[1]);
           this.searchCache = directory;
@@ -51,7 +51,7 @@ export class MangaSeeScraper extends BaseScraper {
         console.warn(`[MangaSee] Mirror ${mirror} failed:`, e.message);
       }
     }
-    
+
     console.error('[MangaSee] All mirrors failed');
     return [];
   }
@@ -124,7 +124,7 @@ export class MangaSeeScraper extends BaseScraper {
       const title = $('h1').first().text().trim();
       const cover = $('img.img-fluid.bottom-5').attr('src');
       const description = $('div.top-5.Content').text().trim();
-      
+
       const info = {};
       $('li.list-group-item').each((_, el) => {
         const text = $(el).text();
@@ -152,17 +152,17 @@ export class MangaSeeScraper extends BaseScraper {
 
   async getChapters(mangaId) {
     const slug = mangaId.replace('mangasee:', '');
-    
+
     try {
       const res = await this.client.get(`${this.baseUrl}/manga/${slug}`);
       const html = res.data;
-      
+
       // Extract chapters from JS variable
       const match = html.match(/vm\.Chapters\s*=\s*(\[[\s\S]*?\]);/);
       if (!match) return [];
-      
+
       const chapters = JSON.parse(match[1]);
-      
+
       return chapters.map(ch => {
         const chNum = this.parseChapterNumber(ch.Chapter);
         return {
@@ -190,26 +190,26 @@ export class MangaSeeScraper extends BaseScraper {
   async getChapterPages(chapterId, mangaId) {
     const slug = mangaId.replace('mangasee:', '');
     const chNum = chapterId.replace(`${slug}-chapter-`, '');
-    
+
     // Format chapter for URL
-    const chFormatted = chNum.includes('.') 
-      ? chNum.replace('.', '-') 
+    const chFormatted = chNum.includes('.')
+      ? chNum.replace('.', '-')
       : chNum;
-    
+
     try {
       const res = await this.client.get(`${this.baseUrl}/read-online/${slug}-chapter-${chFormatted}.html`);
       const html = res.data;
-      
+
       // Extract page info
       const chapterMatch = html.match(/vm\.CurChapter\s*=\s*({[\s\S]*?});/);
       const pathMatch = html.match(/vm\.CurPathName\s*=\s*"([^"]+)"/);
-      
+
       if (!chapterMatch || !pathMatch) return [];
-      
+
       const chapter = JSON.parse(chapterMatch[1]);
       const pathName = pathMatch[1];
       const pageCount = parseInt(chapter.Page, 10);
-      
+
       const pages = [];
       for (let i = 1; i <= pageCount; i++) {
         const pageNum = String(i).padStart(3, '0');
@@ -221,7 +221,7 @@ export class MangaSeeScraper extends BaseScraper {
           originalUrl,
         });
       }
-      
+
       return pages;
     } catch (e) {
       console.error('[MangaSee] Pages error:', e.message);
@@ -241,14 +241,14 @@ export class MangaSeeScraper extends BaseScraper {
       // Get tags from actual manga directory
       const directory = await this.getSearchIndex();
       const tagsSet = new Set();
-      
+
       // Extract all unique genres from manga
       directory.forEach(manga => {
         if (manga.g && Array.isArray(manga.g)) {
           manga.g.forEach(genre => tagsSet.add(genre));
         }
       });
-      
+
       const tags = Array.from(tagsSet).sort();
       console.log(`[MangaSee] Loaded ${tags.length} official tags`);
       return tags;
