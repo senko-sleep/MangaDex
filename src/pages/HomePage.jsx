@@ -260,6 +260,7 @@ export default function HomePage() {
   const [selectedSources, setSelectedSources] = useState(savedState?.selectedSources || []);
   const [contentTypes, setContentTypes] = useState([]);
   const [contentType, setContentType] = useState(savedState?.contentType || 'all');
+  const [artistFilter, setArtistFilter] = useState(savedState?.artistFilter || '');
   const [contentRating, setContentRating] = useState(savedState?.contentRating || 'safe');
   // showAdult is derived from contentRating, not a separate state
   const [statusFilter, setStatusFilter] = useState(savedState?.statusFilter || 'all');
@@ -285,6 +286,7 @@ export default function HomePage() {
       search,
       contentRating,
       contentType,
+      artistFilter,
       selectedSources,
       statusFilter,
       sortBy,
@@ -1021,24 +1023,8 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* Content Type & Sources - Inline */}
+                {/* Sources (inline) and IMHentai artist filter */}
                 <div className="flex flex-wrap items-start gap-3 mb-3">
-                  {/* Content Type */}
-                  {availableContentTypes.length > 1 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-semibold text-zinc-500">Type:</span>
-                      <div className="flex flex-wrap gap-1">
-                        <button onClick={() => setContentType('all')}
-                          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${contentType === 'all' ? 'bg-cyan-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>All</button>
-                        {availableContentTypes.map(type => (
-                          <button key={type.id} onClick={() => setContentType(type.id)}
-                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${contentType === type.id ? 'bg-cyan-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
-                            {type.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   {/* Sources */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] font-semibold text-zinc-500">Source:</span>
@@ -1054,7 +1040,37 @@ export default function HomePage() {
                       )}
                     </div>
                   </div>
+
                 </div>
+
+                {/* Artist Filter (Advanced) - visible when IMHentai selected */}
+                {selectedSources.includes('imhentai') && (
+                  <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Camera className="w-3.5 h-3.5 text-pink-500" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (IMHentai)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={artistFilter}
+                        onChange={e => setArtistFilter(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && artistFilter.trim()) {
+                            setSearch(artistFilter.trim());
+                            setPage(1);
+                            setShowFilters(false);
+                          }
+                        }}
+                        placeholder="Enter artist name..."
+                        className="flex-1 h-9 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50"
+                      />
+                      <button onClick={() => { if (artistFilter.trim()) { setSearch(artistFilter.trim()); setPage(1); setShowFilters(false); } }}
+                        className="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md">Apply</button>
+                      <button onClick={() => { setArtistFilter(''); }} className="px-2 py-1 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md">Clear</button>
+                    </div>
+                  </div>
+                      )}
 
                 {/* Tags Section - Compact collapsible */}
                 {availableFilters.tags && allTags.length > 0 && (

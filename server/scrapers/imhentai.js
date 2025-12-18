@@ -40,6 +40,24 @@ export class IMHentaiScraper extends BaseScraper {
         sortBy = options.sort || 'latest';
       }
 
+      // Check if this is an artist search
+      // Artist search if:
+      // 1. Query matches "artist:<name>" or "@<name>" format
+      // 2. Query is a simple single word with no spaces (like "dagasi")
+      // AND there are no tags, excludeTags, or language filters
+      const queryTrimmed = (query || '').trim();
+      const artistMatch = queryTrimmed.match(/^(?:artist:|@)([\w-]+)$/i);
+      const isSimpleWord = /^[\w-]+$/.test(queryTrimmed) && !queryTrimmed.includes(' ');
+      
+      if ((artistMatch || isSimpleWord) && tags.length === 0 && excludeTags.length === 0 && !language) {
+        const artistName = artistMatch ? artistMatch[1] : queryTrimmed;
+        const artistUrl = `${this.baseUrl}/artist/${encodeURIComponent(artistName)}/${page > 1 ? `?page=${page}` : ''}`;
+        console.log('[IMHentai] Searching deeper:', artistUrl);
+        const $ = await this.fetch(artistUrl);
+        if (!$) return [];
+        return this.parseGalleryList($);
+      }
+
       const params = new URLSearchParams();
 
       // Build search query

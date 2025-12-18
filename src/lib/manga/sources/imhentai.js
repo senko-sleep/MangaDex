@@ -116,37 +116,26 @@ class IMHentaiSource extends BaseSource {
       isArtistSearch = false,
       forceArtistSearch = false
     } = options;
-    
+
     // Clean up the query
     query = (query || '').trim();
+
+    // Check if this is an artist search:
+    // 1. Format: artist:<name> or @<name>
+    // 2. Simple single word with no spaces (like "dagasi")
+    const artistMatch = query.match(/^(?:artist:|@)([\w-]+)$/i);
+    const isSimpleWord = /^[\w-]+$/.test(query) && !query.includes(' ');
     
-    // Check if this is a direct artist search (either by format or forced)
-    const artistName = this.parseArtistQuery(query);
-    if (artistName && (isArtistSearch || forceArtistSearch || !query.includes(' '))) {
+    if (artistMatch || isSimpleWord) {
+      const artistName = artistMatch ? artistMatch[1].toLowerCase() : query.toLowerCase();
       console.log(`[IMHentai] Direct artist search for: ${artistName}, page: ${page}`);
       const galleries = await this.fetchArtistGalleries(artistName, page);
-      
-      // Filter out duplicates and apply limit
       const filteredGalleries = galleries.filter(g => !existingIds.has(g.id));
       filteredGalleries.forEach(g => existingIds.add(g.id));
-      
-      return {
-        results: filteredGalleries,
-        hasMore: galleries.length >= 24, // Assuming 24 items per page
-        nextPage: page + 1,
-        isArtistSearch: true,
-        artistName,
-        sort: 'date',
-        sortOrder: 'desc',
-        filters: {
-          artist: artistName,
-          category: 'all'
-        }
-      };
+      return filteredGalleries;
     }
     
     try {
-
       // If empty query and we have category/type, browse that category instead
       if (!query && (category !== 'all' || type !== 'all')) {
         return this.getLatest(options);

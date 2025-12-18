@@ -124,8 +124,19 @@ export async function GET(request: NextRequest) {
 
         // Perform search or browse based on sort preference
         if (query) {
-          // Search with query
-          results = await source.search(query, searchOptions);
+          // Special-case: IMHentai - if query is a simple artist name, use artist page instead of generic search
+          if (sourceName === 'imhentai' && /^[\w-]+$/.test(query)) {
+            try {
+              const pageNum = page || 1;
+              const artistResults = await source.fetchArtistGalleries(query.toLowerCase(), pageNum);
+              results = artistResults || [];
+            } catch (e) {
+              results = [];
+            }
+          } else {
+            // Search with query
+            results = await source.search(query, searchOptions);
+          }
         } else if (sort === 'latest') {
           // Latest/newest first
           results = await (source.getLatest?.(searchOptions) || source.search?.('', searchOptions) || []);
