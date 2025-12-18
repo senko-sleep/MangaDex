@@ -39,7 +39,7 @@ const SOURCES = {
   anchira: AnchiraSource,
 };
 
-// Source status cache - pre-initialize all sources as available
+// Source status cache - pre-initialize all sources as available and mark adult sources
 const sourceStatus = {
   // Mainstream manga sources
   mangadex: { name: 'MangaDex', available: true, lastCheck: Date.now(), adult: false },
@@ -48,6 +48,14 @@ const sourceStatus = {
   mangapark: { name: 'MangaPark', available: true, lastCheck: Date.now(), adult: false },
   bato: { name: 'Bato.to', available: true, lastCheck: Date.now(), adult: false },
   kitsu: { name: 'Kitsu', available: true, lastCheck: Date.now(), adult: false },
+  comick: { name: 'Comick', available: true, lastCheck: Date.now(), adult: false },
+  // Adult content sources (doujinshi, manga, CG sets)
+  nhentai: { name: 'NHentai', available: true, lastCheck: Date.now(), adult: true },
+  hentairead: { name: 'HentaiRead', available: true, lastCheck: Date.now(), adult: true },
+  hitomi: { name: 'Hitomi', available: true, lastCheck: Date.now(), adult: true },
+  ehentai: { name: 'E-Hentai', available: true, lastCheck: Date.now(), adult: true },
+  imhentai: { name: 'IMHentai', available: true, lastCheck: Date.now(), adult: true },
+  anchira: { name: 'Anchira', available: true, lastCheck: Date.now(), adult: true },
   comick: { name: 'Comick', available: true, lastCheck: Date.now(), adult: false },
   // Adult content sources (doujinshi, manga, CG sets)
   nhentai: { name: 'nhentai', available: true, lastCheck: Date.now(), adult: true },
@@ -96,10 +104,8 @@ export function getSourceStatus() {
 
 // Get available sources - always return all sources
 export function getAvailableSources(includeAdult = true) {
-  return Object.keys(SOURCES).filter(name => {
-    const status = sourceStatus[name];
-    return includeAdult || !status?.adult;
-  });
+  // Always include all sources by default
+  return Object.keys(SOURCES);
 }
 
 // Check connectivity for a specific source
@@ -124,9 +130,10 @@ export async function checkSourceConnectivity(sourceName) {
 export async function searchAllSources(query, options = {}) {
   const {
     sources = null,
-    includeAdult = true,
-    limit = 24,
-    timeout = 5000  // Reduced timeout for speed
+    includeAdult = true,  // Keep for backward compatibility
+    limit = 100,  // Increased limit for more results
+    timeout = 10000,  // Increased timeout for more sources
+    includeAll = true  // New option to force include all sources
   } = options;
 
   const targetSources = sources || getAvailableSources(includeAdult);
@@ -303,7 +310,7 @@ function normalizeTitle(title) {
 
 // Get popular manga - fast, prioritize MangaDex
 export async function getPopularManga(options = {}) {
-  const { limit = 24, includeAdult = true } = options;
+  const { limit = 100, includeAdult = true } = options;  // Increased default limit
 
   // Get from MangaDex first (fastest and most reliable)
   try {
@@ -349,7 +356,7 @@ export async function getPopularManga(options = {}) {
 
 // Get latest updates from all sources
 export async function getLatestUpdates(options = {}) {
-  const { limit = 24, includeAdult = true } = options;
+  const { limit = 100, includeAdult = true } = options;  // Increased default limit
   const targetSources = getAvailableSources(includeAdult);
 
   const results = await Promise.allSettled(

@@ -47,30 +47,288 @@ class IMHentaiSource extends BaseSource {
     this.thumbServer = 'https://m1.imhentai.xxx/t';
   }
 
+  /**
+   * Enhanced search with support for advanced queries:
+   * - title: search in titles (default)
+   * - tag: search in tags (prefix with # or tag:)
+   * - description: search in descriptions (prefix with description: or desc:)
+   * - artist: search by artist (prefix with artist: or @)
+   * - group: search by group (prefix with group:)
+   * - language: filter by language (prefix with lang: or language:)
+   * - rating: filter by minimum rating (prefix with rating: or score:)
+   * - pages: filter by page count (prefix with pages: or p:)
+   * - sort: sort by (popular, popular-today, popular-week, popular-month, date, rating)
+   * 
+   * Examples:
+   * - "tag:loli tag:blonde" - galleries with both loli and blonde tags
+   * - "artist:shindoL" or "@shindoL" - galleries by shindoL (case-insensitive)
+   * - "artist:(shindoL OR shindol)" - galleries by either shindoL or shindol
+   * - "artist:shin*" - galleries by artists starting with 'shin' (wildcard search)
+   * - "artist:^shin" - galleries by artists starting exactly with 'shin'
+   * - "artist:lol$" - galleries by artists ending with 'lol'
+   * - "rating:4.5" - galleries with at least 4.5 rating
+   * - "pages:>20" - galleries with more than 20 pages
+   * - "sort:popular-today" - sort by today's popularity
+   */
+  /**
+   * Parse artist name from query or return null if not an artist query
+   */
+  parseArtistQuery(query) {
+    // Check if the query is exactly in the format "artist:name" or "@name"
+    const artistMatch = query.match(/^(?:artist:|@)([^\s]+)$/i);
+    if (artistMatch) {
+      return artistMatch[1].toLowerCase();
+    }
+    
+    // Check if the query is just a simple name (no spaces, no special characters except - and _)
+    if (/^[\w-]+$/.test(query.trim())) {
+      return query.trim().toLowerCase();
+    }
+    
+    return null;
+  }
+
+  /**
+   * Fetch galleries from artist page
+   */
+  async fetchArtistGalleries(artist, page = 1) {
+    try {
+      const url = `${this.baseUrl}/artist/${encodeURIComponent(artist)}/${page > 1 ? `?page=${page}` : ''}`;
+      console.log(`[IMHentai] Fetching artist page: ${url}`);
+      
+      const html = await this.fetchHtml(url);
+      return this.parseGalleryList(html);
+    } catch (error) {
+      console.error(`[IMHentai] Failed to fetch artist ${artist}:`, error);
+      return [];
+    }
+  }
+
   async search(query, options = {}) {
     const { 
       limit = 24, 
       page = 1, 
       category = 'all',
       type = 'all',
-      existingIds = new Set()
+      existingIds = new Set(),
+      sort = 'date',
+      sortDesc = true,
+      isArtistSearch = false,
+      forceArtistSearch = false
     } = options;
     
+    // Clean up the query
+    query = (query || '').trim();
+    
+    // Check if this is a direct artist search (either by format or forced)
+    const artistName = this.parseArtistQuery(query);
+    if (artistName && (isArtistSearch || forceArtistSearch || !query.includes(' '))) {
+      console.log(`[IMHentai] Direct artist search for: ${artistName}, page: ${page}`);
+      const galleries = await this.fetchArtistGalleries(artistName, page);
+      
+      // Filter out duplicates and apply limit
+      const filteredGalleries = galleries.filter(g => !existingIds.has(g.id));
+      filteredGalleries.forEach(g => existingIds.add(g.id));
+      
+      return {
+        results: filteredGalleries,
+        hasMore: galleries.length >= 24, // Assuming 24 items per page
+        nextPage: page + 1,
+        isArtistSearch: true,
+        artistName,
+        sort: 'date',
+        sortOrder: 'desc',
+        filters: {
+          artist: artistName,
+          category: 'all'
+        }
+      };
+    }
+    
     try {
+
       // If empty query and we have category/type, browse that category instead
       if (!query && (category !== 'all' || type !== 'all')) {
         return this.getLatest(options);
       }
+
+      // Parse advanced search parameters
+      const params = new URLSearchParams();
+      let searchQuery = '';
+      const searchTerms = [];
+      const tagTerms = [];
+      const titleTerms = [];
+      const descTerms = [];
+      const artistTerms = [];
+      const groupTerms = [];
+      let minRating = 0;
+      let minPages = 0;
+      let maxPages = 0;
+      let language = '';
+      let sortField = sort;
+      let sortOrder = sortDesc ? 'desc' : 'asc';
+
+      // Parse query string for advanced search terms
+      const terms = query.split(/\s+/);
+      for (const term of terms) {
+        const lowerTerm = term.toLowerCase();
+        
+        // Handle tag search (prefix with # or tag:)
+        if (term.startsWith('#') || term.startsWith('tag:')) {
+          const tag = term.replace(/^(#|tag:)/, '').trim();
+          if (tag) tagTerms.push(`"${tag}"`);
+          continue;
+        }
+        
+        // Handle description search
+        if (term.startsWith('description:') || term.startsWith('desc:')) {
+          const desc = term.replace(/^(description:|desc:)/, '').trim();
+          if (desc) descTerms.push(`"${desc}"`);
+          continue;
+        }
+        
+        // Handle artist search with advanced options
+        if (term.startsWith('artist:') || term.startsWith('@')) {
+          let artist = term.replace(/^(artist:|@)/, '').trim();
+          
+          // Check if this is a direct artist page search (no special characters)
+          if (/^[\w-]+$/.test(artist)) {
+            // This is a simple artist name, we'll handle it as a direct artist page search
+            if (terms.length === 1 || (terms.length === 2 && terms[1].startsWith('page:'))) {
+              // If this is the only term or followed by a page parameter, treat as direct artist search
+              const pageMatch = terms[1]?.match(/^page:(\d+)$/);
+              const pageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+              return this.search(`artist:${artist}`, { ...options, page: pageNum, isArtistSearch: true });
+            }
+          }
+          
+          // Handle OR conditions in artist names (artist:(name1 OR name2))
+          if (artist.startsWith('(') && artist.endsWith(')')) {
+            const orArtists = artist.slice(1, -1).split(' OR ').map(a => a.trim());
+            if (orArtists.length > 1) {
+              artistTerms.push(`(${orArtists.map(a => `artist:"${a}"`).join(' OR ')})`);
+              continue;
+            }
+            artist = orArtists[0]; // Fallback to single artist if invalid OR syntax
+          }
+          
+          // Handle wildcard searches and exact matches
+          if (artist) {
+            // Convert to lowercase for case-insensitive search
+            artist = artist.toLowerCase();
+            
+            // Handle exact start/end matching
+            if (artist.startsWith('^')) {
+              // Exact start match
+              artistTerms.push(`artist:^"${artist.slice(1)}"`);
+            } else if (artist.endsWith('$')) {
+              // Exact end match
+              artistTerms.push(`artist:"${artist.slice(0, -1)}$"`);
+            } else if (artist.includes('*')) {
+              // Wildcard search
+              artistTerms.push(`artist:${artist}`);
+            } else {
+              // Regular search (case-insensitive)
+              artistTerms.push(`artist:"${artist}"`);
+            }
+          }
+          continue;
+        }
+        
+        // Handle group search
+        if (term.startsWith('group:')) {
+          const group = term.replace(/^group:/, '').trim();
+          if (group) groupTerms.push(`"${group}"`);
+          continue;
+        }
+        
+        // Handle language filter
+        if (term.startsWith('lang:') || term.startsWith('language:')) {
+          language = term.split(':')[1]?.trim() || '';
+          continue;
+        }
+        
+        // Handle rating filter
+        if (term.startsWith('rating:') || term.startsWith('score:')) {
+          const rating = parseFloat(term.split(':')[1]);
+          if (!isNaN(rating)) minRating = Math.max(0, Math.min(5, rating));
+          continue;
+        }
+        
+        // Handle page count filter
+        if (term.startsWith('pages:') || term.startsWith('p:')) {
+          const pageTerm = term.split(':')[1]?.trim() || '';
+          if (pageTerm.startsWith('>=')) {
+            minPages = parseInt(pageTerm.substring(2)) || 0;
+          } else if (pageTerm.startsWith('>')) {
+            minPages = (parseInt(pageTerm.substring(1)) || 0) + 1;
+          } else if (pageTerm.startsWith('<=')) {
+            maxPages = parseInt(pageTerm.substring(2)) || 0;
+          } else if (pageTerm.startsWith('<')) {
+            maxPages = (parseInt(pageTerm.substring(1)) || 1) - 1;
+          } else {
+            const pages = parseInt(pageTerm);
+            if (!isNaN(pages)) {
+              minPages = pages;
+              maxPages = pages;
+            }
+          }
+          continue;
+        }
+        
+        // Handle sort
+        if (term.startsWith('sort:')) {
+          const sortValue = term.split(':')[1]?.trim() || '';
+          if (['popular', 'popular-today', 'popular-week', 'popular-month', 'date', 'rating'].includes(sortValue)) {
+            sortField = sortValue;
+            sortOrder = sortValue.startsWith('popular') ? 'desc' : sortOrder;
+          }
+          continue;
+        }
+        
+        // Default to title search for regular terms
+        if (term.trim()) {
+          titleTerms.push(`"${term.trim()}"`);
+        }
+      }
+
+      // Build the search query
+      if (titleTerms.length > 0) searchTerms.push(titleTerms.join(' '));
+      if (tagTerms.length > 0) searchTerms.push(`tags:${tagTerms.join(' ')}`);
+      if (descTerms.length > 0) searchTerms.push(`description:${descTerms.join(' ')}`);
+      if (artistTerms.length > 0) searchTerms.push(`artist:${artistTerms.join(' ')}`);
+      if (groupTerms.length > 0) searchTerms.push(`group:${groupTerms.join(' ')}`);
       
-      let url = `${this.baseUrl}/search/?key=${encodeURIComponent(query)}&page=${page}`;
+      // Add filters
+      if (minRating > 0) params.append('min_rating', minRating);
+      if (minPages > 0) params.append('min_pages', minPages);
+      if (maxPages > 0) params.append('max_pages', maxPages);
+      if (language) params.append('language', language);
       
       // Add category filter
       const cat = category !== 'all' ? category : type;
       if (cat !== 'all' && CATEGORY_IDS[cat]) {
-        url += `&cat=${CATEGORY_IDS[cat]}`;
+        params.append('cat', CATEGORY_IDS[cat]);
       }
       
+      // Add search query if we have any terms
+      if (searchTerms.length > 0) {
+        // If we have artist terms and it's a simple artist search, use artist page instead
+        if (artistTerms.length > 0 && searchTerms.length === artistTerms.length) {
+          const artistName = artistTerms[0].replace(/^artist:"|"$/g, '');
+          return this.search(`artist:${artistName}`, { ...options, isArtistSearch: true });
+        }
+        params.append('key', searchTerms.join(' '));
+      }
+      
+      // Add pagination and sorting
+      params.append('page', page);
+      params.append('sort', sortField);
+      params.append('order', sortOrder);
+      
+      const url = `${this.baseUrl}/search/?${params.toString()}`;
       console.log('[IMHentai] Searching:', url);
+      
       const html = await this.fetchHtml(url);
       let galleries = this.parseGalleryList(html);
       
@@ -83,7 +341,16 @@ class IMHentaiSource extends BaseSource {
       return { 
         results: galleries.slice(0, limit),
         hasMore: galleries.length >= 24, // IMHentai shows 24 results per page
-        nextPage: page + 1
+        nextPage: page + 1,
+        sort: sortField,
+        sortOrder,
+        filters: {
+          category: cat,
+          minRating,
+          minPages,
+          maxPages,
+          language
+        }
       };
     } catch (error) {
       console.error('[IMHentai] Search failed:', error);
@@ -304,29 +571,38 @@ class IMHentaiSource extends BaseSource {
       this.log.warn('IMHentai pages failed', { galleryId, error: error.message });
       throw error;
     }
-  }
-
-  parseGalleryList(html) {
     const results = [];
     
-    // Try multiple gallery item patterns to handle different layouts
+    // Check if this is an artist page
+    const isArtistPage = html.includes('class="artist-info"') || html.includes('class="artist-galleries"');
+    
+    // Different patterns to match gallery entries
     const patterns = [
-      // Modern grid layout
-      {
-        regex: /<div[^>]*class="[^"]*thumb[^"]*"[^>]*>([\s\S]*?)<\/a>/gi,
-        link: /href="\/gallery\/(\d+)\/?"/i,
-        title: /class="[^"]*caption[^"]*"[^>]*>([^<]+)<\/|title="([^"]+)"/i,
+      // Artist page gallery format
+      isArtistPage ? {
+        regex: /<div[^>]*class="[^"]*item"[^>]*>([\s\S]*?)<\/div>/gi,
+        link: /<a[^>]*href="\/gallery\/(\d+)\/?"[^>]*>/i,
+        title: /<div[^>]*class="[^"]*title"[^>]*>([^<]+)<\/div>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
-        category: /<span[^>]*class="[^"]*cat[^"]*"[^>]*>([^<]+)<\/span>/i,
+        category: /<div[^>]*class="[^"]*category"[^>]*>([^<]+)<\/div>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
+      } : null,
+      // New gallery card format
+      {
+        regex: /<div[^>]*class="[^"]*gallery"[^>]*>([\s\S]*?)<\/div>/gi,
+        link: /<a[^>]*href="\/gallery\/(\d+)\/?"[^>]*>/i,
+        title: /<div[^>]*class="[^"]*caption"[^>]*>([^<]+)<\/div>/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<div[^>]*class="[^"]*cat"[^>]*>([^<]+)<\/div>/i,
         pages: /(\d+)\s*(?:P|pages|page)/i
       },
-      // Alternative grid layout
+      // Old gallery row format
       {
-        regex: /<article[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+        regex: /<tr[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi,
         link: /href="\/gallery\/(\d+)\/?"/i,
-        title: /class="[^"]*caption[^"]*"[^>]*>([^<]+)<\/|title="([^"]+)"/i,
+        title: /class="[^"]*title[^"]*"[^>]*>([^<]+)<\/a>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
-        category: /<span[^>]*class="[^"]*type[^"]*"[^>]*>([^<]+)<\/span>/i,
+        category: /<span[^>]*class="[^"]*category[^"]*"[^>]*>([^<]+)<\/span>/i,
         pages: /(\d+)\s*(?:P|pages|page)/i
       },
       // List layout
@@ -341,6 +617,7 @@ class IMHentaiSource extends BaseSource {
     ];
 
     for (const pattern of patterns) {
+      if (!pattern) continue; // Skip null patterns (like disabled artist page pattern)
       const { regex, link, title, thumb, category, pages } = pattern;
       let match;
       
