@@ -26,7 +26,7 @@ export async function GET(request) {
     const query = searchParams.get('q') || '';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '24', 10)));
-    const sort = searchParams.get('sort') || 'latest';
+    const sort = searchParams.get('sort') || 'popular';
 
     // Validate category
     const validCategories = Object.values(IMHENTAI_CATEGORIES);

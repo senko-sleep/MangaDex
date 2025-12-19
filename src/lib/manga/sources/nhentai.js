@@ -32,26 +32,50 @@ class NHentaiSource extends BaseSource {
   }
 
   async getPopular(options = {}) {
-    const { limit = 24 } = options;
+    const { limit = 24, page = 1 } = options;
     
     try {
-      const html = await this.fetchHtml(`${this.baseUrl}/?sort=popular`);
-      return this.parseGalleryList(html).slice(0, limit);
+      const url = page > 1 
+        ? `${this.baseUrl}/?sort=popular&page=${page}`
+        : `${this.baseUrl}/?sort=popular`;
+      
+      const html = await this.fetchHtml(url);
+      const results = this.parseGalleryList(html);
+      
+      return {
+        results: results.slice(0, limit),
+        hasMore: results.length >= limit,
+        nextPage: page + 1,
+        sort: 'popular',
+        sortOrder: 'desc'
+      };
     } catch (error) {
       this.log.warn('Get popular failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 
   async getLatest(options = {}) {
-    const { limit = 24 } = options;
+    const { limit = 24, page = 1 } = options;
     
     try {
-      const html = await this.fetchHtml(this.baseUrl);
-      return this.parseGalleryList(html).slice(0, limit);
+      const url = page > 1 
+        ? `${this.baseUrl}/?page=${page}`
+        : this.baseUrl;
+      
+      const html = await this.fetchHtml(url);
+      const results = this.parseGalleryList(html);
+      
+      return {
+        results: results.slice(0, limit),
+        hasMore: results.length >= limit,
+        nextPage: page + 1,
+        sort: 'latest',
+        sortOrder: 'desc'
+      };
     } catch (error) {
       this.log.warn('Get latest failed', { error: error.message });
-      return [];
+      return { results: [], hasMore: false, nextPage: page };
     }
   }
 

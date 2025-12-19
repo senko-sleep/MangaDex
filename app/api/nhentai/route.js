@@ -32,16 +32,19 @@ export async function GET(request) {
 
     if (query) {
       // Search mode
-      results = await nhentaiSource.search(query, { 
+      const searchResults = await nhentaiSource.search(query, { 
         limit, 
         page
       });
+      results = searchResults;
     } else if (sort === 'popular') {
       // Popular mode
-      results = await nhentaiSource.getPopular({ limit });
+      const popularResults = await nhentaiSource.getPopular({ limit, page });
+      results = popularResults.results;
     } else {
       // Latest mode (default)
-      results = await nhentaiSource.getLatest({ limit });
+      const latestResults = await nhentaiSource.getLatest({ limit, page });
+      results = latestResults.results;
     }
 
     const duration = Date.now() - startTime;

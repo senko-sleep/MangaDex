@@ -1050,7 +1050,7 @@ export default function HomePage() {
                       <Camera className="w-3.5 h-3.5 text-pink-500" />
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (IMHentai)</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full">
                       <input
                         type="text"
                         value={artistFilter}
@@ -1063,14 +1063,25 @@ export default function HomePage() {
                           }
                         }}
                         placeholder="Enter artist name..."
-                        className="flex-1 h-9 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50"
+                        className="w-full h-9 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50"
                       />
-                      <button onClick={() => { if (artistFilter.trim()) { setSearch(artistFilter.trim()); setPage(1); setShowFilters(false); } }}
-                        className="px-3 py-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md">Apply</button>
-                      <button onClick={() => { setArtistFilter(''); }} className="px-2 py-1 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md">Clear</button>
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <button 
+                          onClick={() => { if (artistFilter.trim()) { setSearch(artistFilter.trim()); setPage(1); setShowFilters(false); } }}
+                          className="flex-1 sm:flex-none h-9 px-3 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
+                        >
+                          Apply
+                        </button>
+                        <button 
+                          onClick={() => { setArtistFilter(''); }} 
+                          className="flex-1 sm:flex-none h-9 px-3 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+                        >
+                          Clear
+                        </button>
+                      </div>
                     </div>
                   </div>
-                      )}
+                )}
 
                 {/* Tags Section - Compact collapsible */}
                 {availableFilters.tags && allTags.length > 0 && (
