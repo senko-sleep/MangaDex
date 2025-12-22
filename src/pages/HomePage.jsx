@@ -438,8 +438,9 @@ export default function HomePage() {
     }
 
     // Sort filter
-    if (sortBy) {
-      params.set('sort', sortBy);
+    const currentSort = sortBy || (selectedSources.includes('imhentai') ? 'popular' : '');
+    if (currentSort) {
+      params.set('sort', currentSort);
     }
 
     // Tag filters
@@ -663,7 +664,17 @@ export default function HomePage() {
         const element = document.getElementById(elementId);
         if (element) {
           console.log('[MangaFox] Found element, scrolling to it');
-          element.scrollIntoView({ behavior: 'instant', block: 'center' });
+          
+          // Get element's position relative to viewport and calculate exact scroll position
+          const rect = element.getBoundingClientRect();
+          const elementCenter = rect.top + rect.height / 2;
+          const viewportCenter = window.innerHeight / 2;
+          const scrollTarget = window.scrollY + elementCenter - viewportCenter;
+          
+          // Scroll to exact position to center the element
+          window.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'instant' });
+          
+          // Add highlight effect
           element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2', 'ring-offset-zinc-950', 'rounded-xl');
           setTimeout(() => {
             element.classList.remove('ring-2', 'ring-orange-500', 'ring-offset-2', 'ring-offset-zinc-950');
@@ -696,15 +707,15 @@ export default function HomePage() {
         clearSavedState();
         scrollToMangaIdRef.current = null;
       } else {
-        // Retry
+        // Retry - element might not be rendered yet
         requestAnimationFrame(() => {
           setTimeout(() => attemptRestoration(attempts + 1), 50);
         });
       }
     };
 
-    // Start restoration
-    setTimeout(() => attemptRestoration(), 50);
+    // Start restoration after a short delay to let images start loading
+    setTimeout(() => attemptRestoration(), 100);
   }, [manga.length]);
 
   const handleSearch = (e) => {

@@ -10,7 +10,6 @@ import { ComickScraper } from '../server/scrapers/comick.js';
 import NHentaiScraper from '../server/scrapers/nhentai.js';
 import { EHentaiScraper } from '../server/scrapers/ehentai.js';
 import { IMHentaiScraper } from '../server/scrapers/imhentai.js';
-import { HitomiScraper } from '../server/scrapers/hitomi.js';
 import MangakakalotScraper from '../server/scrapers/mangakakalot.js';
 import MangaSeeSScraper from '../server/scrapers/mangasee.js';
 import ManganotoScraper from '../server/scrapers/manganato.js';
@@ -25,7 +24,6 @@ const scrapers = {
   nhentai: new NHentaiScraper(),
   ehentai: new EHentaiScraper(),
   imhentai: new IMHentaiScraper(),
-  hitomi: new HitomiScraper(),
   mangakakalot: new MangakakalotScraper(),
   mangasee: new MangaSeeSScraper(),
   manganato: new ManganotoScraper(),

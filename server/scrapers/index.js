@@ -4,7 +4,6 @@ import { KitsuScraper } from './kitsu.js';
 import NHentaiScraper from './nhentai.js';
 import { EHentaiScraper } from './ehentai.js';
 import { IMHentaiScraper } from './imhentai.js';
-import { HitomiScraper } from './hitomi.js';
 import { BatoScraper } from './bato.js';
 
 // Fast cache - 5 min for results, check every 60s for cleanup
@@ -12,8 +11,6 @@ const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
 // Request timeout - fail fast
 const REQUEST_TIMEOUT = 8000;
-// Hitomi needs more time because it uses Playwright
-const HITOMI_TIMEOUT = 45000;
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
@@ -26,7 +23,6 @@ const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
 
 // Get appropriate timeout for source
 const getTimeoutForSource = (sourceId) => {
-  if (sourceId === 'hitomi') return HITOMI_TIMEOUT;
   return REQUEST_TIMEOUT;
 };
 
@@ -50,7 +46,6 @@ const scrapers = {
   nhentai: new NHentaiScraper(),
   ehentai: new EHentaiScraper(),
   imhentai: new IMHentaiScraper(),
-  hitomi: new HitomiScraper(),
   bato: new BatoScraper(),
 };
 
@@ -132,22 +127,6 @@ export const sources = {
       status: false,
       language: true,
       languages: ['all', 'english', 'japanese', 'chinese'],
-      sort: ['popular', 'latest'],
-    },
-  },
-  hitomi: {
-    id: 'hitomi',
-    name: 'Hitomi.la',
-    icon: '💗',
-    isAdult: true,
-    enabled: true,
-    description: 'Large doujinshi archive',
-    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg'],
-    filters: {
-      tags: true,
-      status: false,
-      language: true,
-      languages: ['all', 'english', 'japanese', 'chinese', 'korean'],
       sort: ['popular', 'latest'],
     },
   },
@@ -331,8 +310,13 @@ export async function getPopular(options = {}) {
   const { sourceIds = null, includeAdult = false, adultOnly = false, page = 1, sort = 'popular' } = options;
 
   const cacheKey = `popular:${page}:${sort}:${adultOnly}:${sourceIds?.join(',') || 'all'}`;
+  console.log(`[Scrapers] getPopular cacheKey: ${cacheKey}, targetSources will be:`, sourceIds || 'all enabled');
   const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    console.log(`[Scrapers] Cache hit for ${cacheKey}: ${cached.length} results`);
+    return cached;
+  }
+  console.log(`[Scrapers] Cache miss for ${cacheKey}, fetching...`);
 
   const targetSources = sourceIds
     ? sourceIds.filter(id => scrapers[id])
@@ -341,11 +325,21 @@ export async function getPopular(options = {}) {
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
       const scraper = scrapers[sourceId];
-      if (!scraper) return [];
+      if (!scraper) {
+        console.log(`[Scrapers] No scraper found for: ${sourceId}`);
+        return [];
+      }
       try {
-        const data = await withTimeout(scraper.getPopular(page, includeAdult || adultOnly, sort, adultOnly), getTimeoutForSource(sourceId));
-        return (data || []).map(m => ({ ...m, sourceId }));
+        // Pass options object to scraper for proper sort handling
+        const scraperOptions = { page, sort, includeAdult: includeAdult || adultOnly, adultOnly };
+        console.log(`[Scrapers] Calling getPopular for ${sourceId}`, scraperOptions);
+        const data = await withTimeout(scraper.getPopular(scraperOptions), getTimeoutForSource(sourceId));
+        // Handle both array and object responses
+        const results = Array.isArray(data) ? data : (data?.results || []);
+        console.log(`[Scrapers] ${sourceId} returned ${results.length} results`);
+        return results.map(m => ({ ...m, sourceId }));
       } catch (e) {
+        console.error(`[Scrapers] ${sourceId} getPopular error:`, e.message);
         return [];
       }
     })
@@ -376,8 +370,12 @@ export async function getLatest(options = {}) {
       const scraper = scrapers[sourceId];
       if (!scraper) return [];
       try {
-        const data = await withTimeout(scraper.getLatest(page, includeAdult || adultOnly, adultOnly), getTimeoutForSource(sourceId));
-        return (data || []).map(m => ({ ...m, sourceId }));
+        // Pass options object to scraper for proper handling
+        const scraperOptions = { page, sort: 'latest', includeAdult: includeAdult || adultOnly, adultOnly };
+        const data = await withTimeout(scraper.getLatest(scraperOptions), getTimeoutForSource(sourceId));
+        // Handle both array and object responses
+        const results = Array.isArray(data) ? data : (data?.results || []);
+        return results.map(m => ({ ...m, sourceId }));
       } catch (e) {
         return [];
       }

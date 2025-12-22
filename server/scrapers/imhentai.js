@@ -40,19 +40,15 @@ export class IMHentaiScraper extends BaseScraper {
         sortBy = options.sort || 'latest';
       }
 
-      // Check if this is an artist search
-      // Artist search if:
-      // 1. Query matches "artist:<name>" or "@<name>" format
-      // 2. Query is a simple single word with no spaces (like "dagasi")
-      // AND there are no tags, excludeTags, or language filters
+      // Check if this is an explicit artist search
+      // Artist search ONLY if query matches "artist:<name>" or "@<name>" format
       const queryTrimmed = (query || '').trim();
       const artistMatch = queryTrimmed.match(/^(?:artist:|@)([\w-]+)$/i);
-      const isSimpleWord = /^[\w-]+$/.test(queryTrimmed) && !queryTrimmed.includes(' ');
       
-      if ((artistMatch || isSimpleWord) && tags.length === 0 && excludeTags.length === 0 && !language) {
-        const artistName = artistMatch ? artistMatch[1] : queryTrimmed;
+      if (artistMatch) {
+        const artistName = artistMatch[1];
         const artistUrl = `${this.baseUrl}/artist/${encodeURIComponent(artistName)}/${page > 1 ? `?page=${page}` : ''}`;
-        console.log('[IMHentai] Searching deeper:', artistUrl);
+        console.log('[IMHentai] Artist search:', artistUrl);
         const $ = await this.fetch(artistUrl);
         if (!$) return [];
         return this.parseGalleryList($);
@@ -104,19 +100,36 @@ export class IMHentaiScraper extends BaseScraper {
 
       Object.entries(typeFlags).forEach(([k, v]) => params.set(k, String(v)));
 
-      // Language filters
+      // Language filters - enable common ones by default for broader search
+      // Note: dl and tr are NOT language flags, they are sort parameters
+      const langFlags = { en:1, jp:1, es:1, fr:1, kr:1, de:1, ru:1 };
       if (language && language !== 'all') {
+        // Reset to 0 and enable only selected
+        Object.keys(langFlags).forEach(k => langFlags[k] = 0);
         const langCode = language.substring(0, 2).toLowerCase();
-        // IMHentai uses en, jp, es, fr, kr, de, ru, it, tr codes
-        params.set(langCode, '1');
+        if (langFlags.hasOwnProperty(langCode)) langFlags[langCode] = 1;
       }
+      Object.entries(langFlags).forEach(([k, v]) => params.set(k, String(v)));
 
-      // Sorting
+      // Sorting parameters - lt, pp, dl, tr control the sort tabs
+      // Only one should be active (1), others should be 0
+      // lt=1 = Latest, pp=1 = Popular, dl=1 = Downloaded, tr=1 = Top Rated
+      const sortFlags = { lt: 0, pp: 0, dl: 0, tr: 0 };
       if (sortBy === 'popular') {
-        params.set('sort', 'popular'); // Or 'downloads' / 'views'
+        sortFlags.pp = 1;
+      } else if (sortBy === 'downloaded') {
+        sortFlags.dl = 1;
+      } else if (sortBy === 'rating' || sortBy === 'toprated') {
+        sortFlags.tr = 1;
+      } else {
+        // Default to latest
+        sortFlags.lt = 1;
       }
+      Object.entries(sortFlags).forEach(([k, v]) => params.set(k, String(v)));
 
-      const searchUrl = `${this.baseUrl}/search/?${params}`;
+      params.set('apply', 'Search');
+
+      const searchUrl = `${this.baseUrl}/search/?${params.toString()}`;
       console.log('[IMHentai] Searching deeper:', searchUrl);
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
@@ -136,32 +149,73 @@ export class IMHentaiScraper extends BaseScraper {
       let language = null;
 
       if (typeof options === 'number') {
-        // Old style: getPopular(page, includeAdult, tags, excludeTags, language)
         page = options || 1;
         tags = arguments[2] || [];
         excludeTags = arguments[3] || [];
         language = arguments[4] || null;
       } else {
-        // New style: getPopular({ page, limit, language, tags, exclude })
         page = options.page || 1;
         tags = options.tags || [];
         excludeTags = options.exclude || [];
         language = options.language || null;
       }
 
-      // If tags or language provided, use search
+      // If filters applied, fall back to search with popular sort
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
-        return this.search('', options);
+        return this.search('', { 
+          ...options, 
+          sort: 'popular'
+        });
       }
 
-      const popularUrl = `${this.baseUrl}/popular/?page=${page}`;
+      // Direct popular URL (no filters)
+      const params = new URLSearchParams({
+        lt: '0',
+        pp: '1',
+        m: '1',
+        d: '1',
+        w: '1',
+        i: '1',
+        a: '1',
+        g: '1',
+        key: '',
+        apply: 'Search',
+        en: '1',
+        jp: '1',
+        es: '1',
+        fr: '1',
+        kr: '1',
+        de: '1',
+        ru: '1',
+        dl: '0',
+        tr: '0'
+      });
+
+      if (page > 1) {
+        params.set('page', String(page));
+      }
+
+      const popularUrl = `${this.baseUrl}/search/?${params.toString()}`;
       console.log('[IMHentai] Fetching popular:', popularUrl);
       const $ = await this.fetch(popularUrl);
-      if (!$) return [];
-      return this.parseGalleryList($);
+      if (!$) return { results: [], hasMore: false, nextPage: page };
+      
+      const results = this.parseGalleryList($);
+      
+      return {
+        results,
+        hasMore: results.length >= 20,
+        nextPage: page + 1,
+        sort: 'popular',
+        sortOrder: 'desc'
+      };
     } catch (e) {
       console.error('[IMHentai] Popular error:', e.message);
-      return [];
+      return { 
+        results: [], 
+        hasMore: false, 
+        nextPage: 1 
+      };
     }
   }
 
@@ -174,32 +228,70 @@ export class IMHentaiScraper extends BaseScraper {
       let language = null;
 
       if (typeof options === 'number') {
-        // Old style: getLatest(page, includeAdult, tags, excludeTags, language)
         page = options || 1;
         tags = arguments[2] || [];
         excludeTags = arguments[3] || [];
         language = arguments[4] || null;
       } else {
-        // New style: getLatest({ page, limit, language, tags, exclude })
         page = options.page || 1;
         tags = options.tags || [];
         excludeTags = options.exclude || [];
         language = options.language || null;
       }
 
-      // If tags or language provided, use search
+      // If filters applied, fall back to search with latest sort
       if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
         return this.search('', options);
       }
 
-      const latestUrl = `${this.baseUrl}/?page=${page}`;
+      // Direct latest URL (no filters) - using the specific search params for consistency and reliability
+      const params = new URLSearchParams({
+        lt: '1',
+        pp: '0',
+        m: '1',
+        d: '1',
+        w: '1',
+        i: '1',
+        a: '1',
+        g: '1',
+        key: '',
+        apply: 'Search',
+        en: '1',
+        jp: '1',
+        es: '1',
+        fr: '1',
+        kr: '1',
+        de: '1',
+        ru: '1',
+        dl: '0',
+        tr: '0'
+      });
+
+      if (page > 1) {
+        params.set('page', String(page));
+      }
+
+      const latestUrl = `${this.baseUrl}/search/?${params.toString()}`;
       console.log('[IMHentai] Fetching latest:', latestUrl);
       const $ = await this.fetch(latestUrl);
-      if (!$) return [];
-      return this.parseGalleryList($);
+      if (!$) return { results: [], hasMore: false, nextPage: page };
+      
+      const results = this.parseGalleryList($);
+      
+      return {
+        results,
+        hasMore: results.length >= 20,
+        nextPage: page + 1,
+        sort: 'latest',
+        sortOrder: 'desc'
+      };
     } catch (e) {
       console.error('[IMHentai] Latest error:', e.message);
-      return [];
+      return { 
+        results: [], 
+        hasMore: false, 
+        nextPage: 1 
+      };
     }
   }
 

@@ -281,39 +281,76 @@ class IMHentaiSource extends BaseSource {
         }
       }
 
-      // Build the search query
-      if (titleTerms.length > 0) searchTerms.push(titleTerms.join(' '));
-      if (tagTerms.length > 0) searchTerms.push(`tags:${tagTerms.join(' ')}`);
-      if (descTerms.length > 0) searchTerms.push(`description:${descTerms.join(' ')}`);
-      if (artistTerms.length > 0) searchTerms.push(`artist:${artistTerms.join(' ')}`);
-      if (groupTerms.length > 0) searchTerms.push(`group:${groupTerms.join(' ')}`);
+      // For tag searches, use the website's exact search format
+      const isTagSearch = tagTerms.length > 0 && searchTerms.length === tagTerms.length;
       
-      // Add filters
-      if (minRating > 0) params.append('min_rating', minRating);
-      if (minPages > 0) params.append('min_pages', minPages);
-      if (maxPages > 0) params.append('max_pages', maxPages);
-      if (language) params.append('language', language);
-      
-      // Add category filter
-      const cat = category !== 'all' ? category : type;
-      if (cat !== 'all' && CATEGORY_IDS[cat]) {
-        params.append('cat', CATEGORY_IDS[cat]);
-      }
-      
-      // Add search query if we have any terms
-      if (searchTerms.length > 0) {
-        // If we have artist terms and it's a simple artist search, use artist page instead
-        if (artistTerms.length > 0 && searchTerms.length === artistTerms.length) {
-          const artistName = artistTerms[0].replace(/^artist:"|"$/g, '');
-          return this.search(`artist:${artistName}`, { ...options, isArtistSearch: true });
+      if (isTagSearch) {
+        // Use the website's exact search format for tag searches
+        params.append('lt', '1');  // List view
+        params.append('pp', '0');  // Show all pages
+        
+        // Enable all content types by default
+        params.append('m', '1');  // Manga
+        params.append('d', '1');  // Doujinshi
+        params.append('w', '1');  // Western
+        params.append('i', '1');  // Image Set
+        params.append('a', '1');  // Artist CG
+        params.append('g', '1');  // Game CG
+        
+        // Add the search term (tag)
+        if (tagTerms.length > 0) {
+          // Remove any quotes from the tag terms
+          const cleanTag = tagTerms[0].replace(/^"|"$/g, '');
+          params.append('key', cleanTag);
         }
-        params.append('key', searchTerms.join(' '));
+        
+        // Add pagination
+        params.append('page', page - 1); // IMHentai is 0-indexed for pages
+        
+        // Enable all languages
+        params.append('en', '1'); // English
+        params.append('jp', '1'); // Japanese
+        params.append('es', '1'); // Spanish
+        params.append('fr', '1'); // French
+        params.append('kr', '1'); // Korean
+        params.append('de', '1'); // German
+        params.append('ru', '1'); // Russian
+        params.append('dl', '0'); // Don't show deleted
+        params.append('tr', '0'); // Don't show translated only
+      } else {
+        // Original search logic for non-tag searches
+        if (titleTerms.length > 0) searchTerms.push(titleTerms.join(' '));
+        if (tagTerms.length > 0) searchTerms.push(`tags:${tagTerms.join(' ')}`);
+        if (descTerms.length > 0) searchTerms.push(`description:${descTerms.join(' ')}`);
+        if (artistTerms.length > 0) searchTerms.push(`artist:${artistTerms.join(' ')}`);
+        if (groupTerms.length > 0) searchTerms.push(`group:${groupTerms.join(' ')}`);
+        
+        // Add filters
+        if (minRating > 0) params.append('min_rating', minRating);
+        if (minPages > 0) params.append('min_pages', minPages);
+        if (maxPages > 0) params.append('max_pages', maxPages);
+        if (language) params.append('language', language);
+        
+        // Add category filter
+        const cat = category !== 'all' ? category : type;
+        if (cat !== 'all' && CATEGORY_IDS[cat]) {
+          params.append('cat', CATEGORY_IDS[cat]);
+        }
+        
+        // Add search query if we have any terms
+        if (searchTerms.length > 0) {
+          if (artistTerms.length > 0 && searchTerms.length === artistTerms.length) {
+            const artistName = artistTerms[0].replace(/^artist:"|"$/g, '');
+            return this.search(`artist:${artistName}`, { ...options, isArtistSearch: true });
+          }
+          params.append('key', searchTerms.join(' '));
+        }
+        
+        // Add pagination and sorting
+        params.append('page', page);
+        params.append('sort', sortField);
+        params.append('order', sortOrder);
       }
-      
-      // Add pagination and sorting
-      params.append('page', page);
-      params.append('sort', sortField);
-      params.append('order', sortOrder);
       
       const url = `${this.baseUrl}/search/?${params.toString()}`;
       console.log('[IMHentai] Searching:', url);
@@ -422,45 +459,23 @@ class IMHentaiSource extends BaseSource {
     } = options;
     
     try {
-      // Try multiple possible latest URLs
-      const possiblePaths = [
-        '/',
-        '/latest/',
-        '/latest/all/',
-        '/g/'  // Some sites use this as the root for latest
-      ];
-      
-      const cat = category !== 'all' ? category : type;
       let galleries = [];
       
-      for (const path of possiblePaths) {
-        try {
-          let url = `${this.baseUrl}${path}${path.endsWith('/') ? '' : '/'}?page=${page}`;
-          
-          if (cat !== 'all' && CATEGORY_IDS[cat]) {
-            url = `${this.baseUrl}/${cat}${path}?page=${page}`;
-          }
-          
-          console.log('[IMHentai] Fetching latest from:', url);
-          const html = await this.fetchHtml(url);
-          const newGalleries = this.parseGalleryList(html);
-          
-          // Add only new galleries to avoid duplicates
-          const existingIdsSet = new Set([...existingIds, ...galleries.map(g => g.id)]);
-          newGalleries.forEach(g => {
-            if (!existingIdsSet.has(g.id)) {
-              galleries.push(g);
-              existingIdsSet.add(g.id);
-            }
-          });
-          
-          // If we have enough results, no need to try other URLs
-          if (galleries.length >= limit) break;
-        } catch (error) {
-          console.warn(`[IMHentai] Failed to fetch latest from path: ${path}`, error.message);
-          // Continue to next path
+      // Use the specified URL with all required query parameters
+      const url = `${this.baseUrl}/search/?lt=1&pp=${(page - 1) * 24}&m=1&d=1&w=1&i=1&a=1&g=1&key=&apply=Search&en=1&jp=1&es=1&fr=1&kr=1&de=1&ru=1&dl=0&tr=0`;
+      
+      console.log('[IMHentai] Fetching latest from:', url);
+      const html = await this.fetchHtml(url);
+      const newGalleries = this.parseGalleryList(html);
+      
+      // Add only new galleries to avoid duplicates
+      const existingIdsSet = new Set([...existingIds, ...galleries.map(g => g.id)]);
+      newGalleries.forEach(g => {
+        if (!existingIdsSet.has(g.id)) {
+          galleries.push(g);
+          existingIdsSet.add(g.id);
         }
-      }
+      });
       
       // Sort by ID in descending order (newest first)
       galleries.sort((a, b) => parseInt(b.id) - parseInt(a.id));
@@ -560,26 +575,38 @@ class IMHentaiSource extends BaseSource {
       this.log.warn('IMHentai pages failed', { galleryId, error: error.message });
       throw error;
     }
+  }
+
+  parseGalleryList(html) {
     const results = [];
     
-    // Check if this is an artist page
-    const isArtistPage = html.includes('class="artist-info"') || html.includes('class="artist-galleries"');
+    // Check if this is a search results page
+    const isSearchPage = html.includes('class="search-result"') || html.includes('class="search-page"');
     
     // Different patterns to match gallery entries
     const patterns = [
-      // Artist page gallery format
-      isArtistPage ? {
-        regex: /<div[^>]*class="[^"]*item"[^>]*>([\s\S]*?)<\/div>/gi,
-        link: /<a[^>]*href="\/gallery\/(\d+)\/?"[^>]*>/i,
+      // Search result item format
+      isSearchPage ? {
+        regex: /<div[^>]*class="[^"]*search-item[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        link: /<a[^>]*href="(?:\/gallery\/|\/view\/)(\d+)\/?"[^>]*>/i,
         title: /<div[^>]*class="[^"]*title"[^>]*>([^<]+)<\/div>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
         category: /<div[^>]*class="[^"]*category"[^>]*>([^<]+)<\/div>/i,
         pages: /(\d+)\s*(?:P|pages|page)/i
       } : null,
+      // Artist page gallery format
+      {
+        regex: /<div[^>]*class="[^"]*item"[^>]*>([\s\S]*?)<\/div>/gi,
+        link: /<a[^>]*href="(?:\/gallery\/|\/view\/)(\d+)\/?"[^>]*>/i,
+        title: /<div[^>]*class="[^"]*title"[^>]*>([^<]+)<\/div>/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<div[^>]*class="[^"]*category"[^>]*>([^<]+)<\/div>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
+      },
       // New gallery card format
       {
         regex: /<div[^>]*class="[^"]*gallery"[^>]*>([\s\S]*?)<\/div>/gi,
-        link: /<a[^>]*href="\/gallery\/(\d+)\/?"[^>]*>/i,
+        link: /<a[^>]*href="(?:\/gallery\/|\/view\/)(\d+)\/?"[^>]*>/i,
         title: /<div[^>]*class="[^"]*caption"[^>]*>([^<]+)<\/div>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
         category: /<div[^>]*class="[^"]*cat"[^>]*>([^<]+)<\/div>/i,
@@ -588,7 +615,7 @@ class IMHentaiSource extends BaseSource {
       // Old gallery row format
       {
         regex: /<tr[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi,
-        link: /href="\/gallery\/(\d+)\/?"/i,
+        link: /href="(?:\/gallery\/|\/view\/)(\d+)\/?"/i,
         title: /class="[^"]*title[^"]*"[^>]*>([^<]+)<\/a>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
         category: /<span[^>]*class="[^"]*category[^"]*"[^>]*>([^<]+)<\/span>/i,
@@ -597,13 +624,22 @@ class IMHentaiSource extends BaseSource {
       // List layout
       {
         regex: /<tr[^>]*class="[^"]*gallery[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi,
-        link: /href="\/gallery\/(\d+)\/?"/i,
+        link: /href="(?:\/gallery\/|\/view\/)(\d+)\/?"/i,
         title: /class="[^"]*title[^"]*"[^>]*>([^<]+)<\/a>/i,
         thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
         category: /<span[^>]*class="[^"]*category[^"]*"[^>]*>([^<]+)<\/span>/i,
         pages: /(\d+)\s*(?:P|pages|page)/i
+      },
+      // Fallback for any gallery link
+      {
+        regex: /<a[^>]*href="(?:\/gallery\/|\/view\/)(\d+)\/?"[^>]*>([\s\S]*?)<\/a>/gi,
+        link: /href="(?:\/gallery\/|\/view\/)(\d+)\/?"/i,
+        title: /<[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)<\/[^>]*>/i,
+        thumb: /<img[^>]*(?:src|data-src)="([^"]+)"[^>]*>/i,
+        category: /<[^>]*class="[^"]*(?:category|cat)[^"]*"[^>]*>([^<]+)<\/[^>]*>/i,
+        pages: /(\d+)\s*(?:P|pages|page)/i
       }
-    ];
+    ].filter(Boolean); // Remove any null patterns
 
     for (const pattern of patterns) {
       if (!pattern) continue; // Skip null patterns (like disabled artist page pattern)

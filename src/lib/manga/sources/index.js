@@ -12,7 +12,6 @@ import BatoSource from './bato';
 import KitsuSource from './kitsu';
 import NHentaiSource from './nhentai';
 import HentaiReadSource from './hentairead';
-import HitomiSource from './hitomi';
 import EHentaiSource from './ehentai';
 import IMHentaiSource from './imhentai';
 import AnchiraSource from './anchira';
@@ -33,7 +32,6 @@ const SOURCES = {
   // Adult content sources (doujinshi, manga, CG sets)
   nhentai: NHentaiSource,
   hentairead: HentaiReadSource,
-  hitomi: HitomiSource,
   ehentai: EHentaiSource,
   imhentai: IMHentaiSource,
   anchira: AnchiraSource,
@@ -52,15 +50,6 @@ const sourceStatus = {
   // Adult content sources (doujinshi, manga, CG sets)
   nhentai: { name: 'NHentai', available: true, lastCheck: Date.now(), adult: true },
   hentairead: { name: 'HentaiRead', available: true, lastCheck: Date.now(), adult: true },
-  hitomi: { name: 'Hitomi', available: true, lastCheck: Date.now(), adult: true },
-  ehentai: { name: 'E-Hentai', available: true, lastCheck: Date.now(), adult: true },
-  imhentai: { name: 'IMHentai', available: true, lastCheck: Date.now(), adult: true },
-  anchira: { name: 'Anchira', available: true, lastCheck: Date.now(), adult: true },
-  comick: { name: 'Comick', available: true, lastCheck: Date.now(), adult: false },
-  // Adult content sources (doujinshi, manga, CG sets)
-  nhentai: { name: 'nhentai', available: true, lastCheck: Date.now(), adult: true },
-  hentairead: { name: 'HentaiRead', available: true, lastCheck: Date.now(), adult: true },
-  hitomi: { name: 'Hitomi.la', available: true, lastCheck: Date.now(), adult: true },
   ehentai: { name: 'E-Hentai', available: true, lastCheck: Date.now(), adult: true },
   imhentai: { name: 'IMHentai', available: true, lastCheck: Date.now(), adult: true },
   anchira: { name: 'Anchira', available: true, lastCheck: Date.now(), adult: true },

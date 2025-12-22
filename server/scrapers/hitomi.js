@@ -1,46 +1,42 @@
 import BaseScraper from './base.js';
-import { chromium } from 'playwright';
+import axios from 'axios';
+import https from 'https';
 
 // API base URL for proxy (set via environment variable in production)
 const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
 
-// Browser instance management - reuse browser across requests
-let browserInstance = null;
-let browserLastUsed = 0;
-const BROWSER_TIMEOUT = 5 * 60 * 1000; // Close browser after 5 minutes of inactivity
-
-async function getBrowser() {
-  const now = Date.now();
-  
-  if (browserInstance && browserInstance.isConnected()) {
-    browserLastUsed = now;
-    return browserInstance;
-  }
-  
-  console.log('[Hitomi] Launching headless browser...');
-  browserInstance = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-  browserLastUsed = now;
-  
-  // Auto-close browser after inactivity
-  setInterval(async () => {
-    if (browserInstance && Date.now() - browserLastUsed > BROWSER_TIMEOUT) {
-      console.log('[Hitomi] Closing idle browser...');
-      await browserInstance.close().catch(() => {});
-      browserInstance = null;
-    }
-  }, 60000);
-  
-  return browserInstance;
-}
+// Custom HTTPS agent with IPv4 preference for Hitomi API
+const hitomiHttpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 10,
+  family: 4, // Force IPv4 to avoid DNS resolution issues
+});
 
 // Hitomi.la - Adult content
-// Uses Playwright for headless browser rendering
+// Uses direct API calls (no browser required)
+// API domain changed to gold-usergeneratedcontent.net
 export class HitomiScraper extends BaseScraper {
   constructor() {
     super('Hitomi', 'https://hitomi.la', true);
+    this.apiDomain = 'gold-usergeneratedcontent.net';
+    this.ltnBase = `https://ltn.${this.apiDomain}`;
+    this.ggJsUrl = `https://ltn.${this.apiDomain}/gg.js`;
+    this.ggData = null;
+    this.ggDataExpiry = 0;
+    
+    // Create custom axios client with IPv4 preference for Hitomi API
+    this.apiClient = axios.create({
+      timeout: 10000,
+      httpsAgent: hitomiHttpsAgent,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Origin': this.baseUrl,
+        'Referer': `${this.baseUrl}/`,
+      },
+      decompress: true,
+    });
   }
 
   // Helper to create proxy URL
@@ -50,193 +46,236 @@ export class HitomiScraper extends BaseScraper {
     return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
-  async fetchWithBrowser(url, waitSelector = '.gallery-content', timeout = 30000) {
-    let context = null;
-    let page = null;
-    
+  // Fetch and parse gg.js for subdomain calculation
+  async getGgData() {
+    const now = Date.now();
+    if (this.ggData && now < this.ggDataExpiry) {
+      return this.ggData;
+    }
+
     try {
-      const browser = await getBrowser();
-      context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1920, height: 1080 },
+      const res = await this.apiClient.get(this.ggJsUrl, {
+        timeout: 8000,
+        headers: {
+          'Origin': this.baseUrl,
+          'Referer': `${this.baseUrl}/`,
+        },
       });
-      page = await context.newPage();
+      const js = res.data;
+
+      // Parse gg.js - extract subdomain mapping and b value
+      // b value: b: '...'
+      const bMatch = js.match(/b:\s*['"]([^'"]+)['"]/);
+      // Default o value: var o = N or default: o = N
+      const defaultMatch = js.match(/(?:var\s|default:)\s*o\s*=\s*(\d+)/);
       
-      // Block images/media for speed but allow scripts
-      await page.route('**/*', (route) => {
-        const resourceType = route.request().resourceType();
-        if (['image', 'media', 'font'].includes(resourceType)) {
-          route.abort();
-        } else {
-          route.continue();
+      // Parse case statements for subdomain mapping
+      // case N: o = M pattern
+      const caseMap = {};
+      const caseRegex = /case\s+(\d+):(?:\s*o\s*=\s*(\d+))?/g;
+      let match;
+      let pendingKeys = [];
+      
+      while ((match = caseRegex.exec(js)) !== null) {
+        const key = parseInt(match[1]);
+        const value = match[2] ? parseInt(match[2]) : null;
+        
+        pendingKeys.push(key);
+        if (value !== null) {
+          for (const k of pendingKeys) {
+            caseMap[k] = value;
+          }
+          pendingKeys = [];
         }
-      });
-      
-      console.log(`[Hitomi] Fetching: ${url}`);
-      await page.goto(url, { waitUntil: 'networkidle', timeout });
-      
-      // Wait for initial content
-      try {
-        await page.waitForSelector(waitSelector, { timeout: 10000 });
-      } catch {
-        // Content might already be there
       }
       
-      // Wait longer for JS to fully render all gallery items
-      // Hitomi loads galleries dynamically via JavaScript
-      await page.waitForTimeout(3000);
+      // Also check for if (g === N) o = M pattern
+      const ifRegex = /if\s*\(g\s*===?\s*(\d+)\)[\s{]*o\s*=\s*(\d+)/g;
+      while ((match = ifRegex.exec(js)) !== null) {
+        caseMap[parseInt(match[1])] = parseInt(match[2]);
+      }
       
-      // Scroll down to trigger lazy loading of more items
-      await page.evaluate(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-      });
-      await page.waitForTimeout(1500);
+      this.ggData = {
+        b: bMatch ? bMatch[1].replace(/\//g, '') : '1',
+        defaultO: defaultMatch ? parseInt(defaultMatch[1]) : 0,
+        caseMap: caseMap,
+      };
+      this.ggDataExpiry = now + 60000; // Cache for 1 minute
       
-      const html = await page.content();
-      return html;
+      console.log('[Hitomi] gg.js parsed:', { b: this.ggData.b, defaultO: this.ggData.defaultO, cases: Object.keys(this.ggData.caseMap).length });
+      return this.ggData;
     } catch (e) {
-      console.error('[Hitomi] Browser fetch error:', e.message);
-      return null;
-    } finally {
-      if (page) await page.close().catch(() => {});
-      if (context) await context.close().catch(() => {});
+      console.error('[Hitomi] Failed to fetch gg.js:', e.message);
+      return { b: '1', defaultO: 0, caseMap: {} };
     }
   }
 
-  parseGalleryListFromHtml(html) {
-    const results = [];
-    if (!html) return results;
+  // Calculate subdomain number for image URL based on hash
+  getSubdomainNum(hash, gg) {
+    // inum = last char + chars -3 to -1 parsed as hex
+    const inum = parseInt(hash.slice(-1) + hash.slice(-3, -1), 16);
     
-    const seen = new Set();
+    // Look up in case map, or use default
+    const o = gg.caseMap[inum] !== undefined ? gg.caseMap[inum] : gg.defaultO;
     
-    // Method 1: Match gallery links with lillie class (can be before or after href)
-    // Hitomi structure varies: class="lillie" can appear before or after href
-    const galleryRegex1 = /<a[^>]*(?:class="[^"]*lillie[^"]*"[^>]*href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]+\.html)"|href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]+\.html)"[^>]*class="[^"]*lillie[^"]*")[^>]*>([\s\S]*?)<\/a>/gi;
+    return { inum, subdomainNum: o + 1 };
+  }
+
+  // Build image URL from file info
+  buildImageUrl(file, gg) {
+    const hash = file.hash;
+    const haswebp = file.haswebp !== 0;
+    const hasavif = file.hasavif !== 0;
     
-    let match;
-    while ((match = galleryRegex1.exec(html)) !== null) {
-      const href = match[1] || match[2];
-      const content = match[3];
+    // Determine extension (prefer webp, can use avif if configured)
+    let ext = 'webp';
+    if (hasavif) {
+      ext = 'avif'; // avif has better compression
+    } else if (haswebp) {
+      ext = 'webp';
+    } else if (file.name) {
+      const extMatch = file.name.match(/\.(\w+)$/);
+      if (extMatch) {
+        ext = extMatch[1].toLowerCase();
+      }
+    }
+
+    // Get subdomain calculation
+    const { inum, subdomainNum } = this.getSubdomainNum(hash, gg);
+    
+    // URL format: https://{ext[0]}{subdomainNum}.{domain}/{b}/{inum}/{hash}.{ext}
+    return `https://${ext[0]}${subdomainNum}.${this.apiDomain}/${gg.b}/${inum}/${hash}.${ext}`;
+  }
+
+  // Fetch gallery info from ltn.gold-usergeneratedcontent.net/galleries/{id}.js
+  async fetchGalleryInfo(gid) {
+    try {
+      const url = `${this.ltnBase}/galleries/${gid}.js`;
+      const res = await this.apiClient.get(url, {
+        headers: {
+          'Referer': `${this.baseUrl}/reader/${gid}.html`,
+        },
+      });
+      const js = res.data;
       
-      const idMatch = href.match(/-(\d+)\.html$/);
-      if (!idMatch) continue;
+      // Parse: var galleryinfo = {...}
+      const match = js.match(/var\s+galleryinfo\s*=\s*(\{[\s\S]*\})/);
+      if (!match) return null;
       
-      const gid = idMatch[1];
-      if (seen.has(gid)) continue;
-      seen.add(gid);
+      return JSON.parse(match[1]);
+    } catch (e) {
+      console.error(`[Hitomi] Failed to fetch gallery ${gid}:`, e.message);
+      return null;
+    }
+  }
+
+  // Fetch nozomi index (binary file with gallery IDs)
+  async fetchNozomi(path, start = 0, count = 25) {
+    try {
+      const url = `${this.ltnBase}/${path}`;
+      const byteStart = start * 4;
+      const byteEnd = byteStart + count * 4 - 1;
       
-      let type = 'doujinshi';
-      if (href.includes('/manga/')) type = 'manga';
-      else if (href.includes('/artistcg/')) type = 'artistcg';
-      else if (href.includes('/gamecg/')) type = 'gamecg';
-      else if (href.includes('/anime/')) type = 'anime';
-      else if (href.includes('/imageset/')) type = 'imageset';
+      const res = await this.apiClient.get(url, {
+        responseType: 'arraybuffer',
+        headers: {
+          'Range': `bytes=${byteStart}-${byteEnd}`,
+        },
+      });
       
-      // Extract title - try multiple patterns
-      let title = '';
-      const titleMatch = content.match(/<h1[^>]*>([^<]+)<\/h1>/i) || 
-                         content.match(/<span[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)/i);
-      if (titleMatch) title = titleMatch[1].trim();
+      const buffer = Buffer.from(res.data);
+      const ids = [];
       
-      if (!title || title.length < 2) {
-        const urlTitleMatch = href.match(/\/[^/]+\/(.+)-\d+\.html$/);
-        if (urlTitleMatch) {
-          title = urlTitleMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
-          title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        } else {
-          title = `Gallery ${gid}`;
+      for (let i = 0; i < buffer.length; i += 4) {
+        if (i + 4 <= buffer.length) {
+          ids.push(buffer.readInt32BE(i));
         }
       }
       
-      const imgMatch = content.match(/(?:data-src|src)="([^"]*(?:\.webp|\.jpg|\.png|\.avif)[^"]*)"/i);
-      let cover = imgMatch ? imgMatch[1] : '';
-      if (cover.startsWith('//')) cover = 'https:' + cover;
-      
-      results.push({
-        id: `hitomi:${gid}`,
-        sourceId: 'hitomi',
-        slug: gid,
-        title,
-        cover: this.proxyUrl(cover),
-        type,
-        isAdult: true,
-        contentType: type,
-      });
+      return ids;
+    } catch (e) {
+      console.error(`[Hitomi] Failed to fetch nozomi ${path}:`, e.message);
+      return [];
     }
+  }
+
+  // Convert gallery info to our format
+  galleryInfoToManga(info) {
+    if (!info) return null;
     
-    // Method 2: Fallback - find all gallery links by URL pattern
-    const hrefRegex = /href="(\/(?:doujinshi|manga|artistcg|gamecg|anime|imageset)\/[^"]*-(\d+)\.html)"/gi;
-    while ((match = hrefRegex.exec(html)) !== null) {
-      const href = match[1];
-      const gid = match[2];
-      
-      if (seen.has(gid)) continue;
-      seen.add(gid);
-      
-      let type = 'doujinshi';
-      if (href.includes('/manga/')) type = 'manga';
-      else if (href.includes('/artistcg/')) type = 'artistcg';
-      else if (href.includes('/gamecg/')) type = 'gamecg';
-      else if (href.includes('/anime/')) type = 'anime';
-      else if (href.includes('/imageset/')) type = 'imageset';
-      
-      // Extract title from URL
-      const urlTitleMatch = href.match(/\/[^/]+\/(.+)-\d+\.html$/);
-      let title = `Gallery ${gid}`;
-      if (urlTitleMatch) {
-        title = urlTitleMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
-        title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      }
-      
-      // Try to find cover image near this link
-      const surroundingHtml = html.substring(Math.max(0, match.index - 500), match.index + 500);
-      const imgMatch = surroundingHtml.match(/(?:data-src|src)="([^"]*(?:tn\.hitomi\.la|smalltn|bigtn)[^"]*\.(?:webp|jpg|png|avif)[^"]*)"/i);
-      let cover = imgMatch ? imgMatch[1] : '';
-      if (cover.startsWith('//')) cover = 'https:' + cover;
-      
-      results.push({
-        id: `hitomi:${gid}`,
-        sourceId: 'hitomi',
-        slug: gid,
-        title,
-        cover: this.proxyUrl(cover),
-        type,
-        isAdult: true,
-        contentType: type,
-      });
+    const gid = String(info.id);
+    
+    // Build cover URL from first file if available
+    let cover = '';
+    if (info.files && info.files.length > 0) {
+      const firstFile = info.files[0];
+      // Use thumbnail server - tn.gold-usergeneratedcontent.net
+      const hash = firstFile.hash;
+      const inum = parseInt(hash.slice(-1) + hash.slice(-3, -1), 16);
+      cover = `https://tn.${this.apiDomain}/bigtn/${gid}/${inum}/${hash}.webp`;
     }
-    
-    console.log(`[Hitomi] Parsed ${results.length} galleries from HTML`);
-    return results;
+
+    return {
+      id: `hitomi:${gid}`,
+      sourceId: 'hitomi',
+      slug: gid,
+      title: info.title || info.japanese_title || `Gallery ${gid}`,
+      cover: this.proxyUrl(cover),
+      type: info.type || 'doujinshi',
+      isAdult: true,
+      contentType: info.type || 'doujinshi',
+      artists: (info.artists || []).map(a => a.artist || a),
+      groups: (info.groups || []).map(g => g.group || g),
+      parodies: (info.parodies || []).map(p => p.parody || p),
+      characters: (info.characters || []).map(c => c.character || c),
+      tags: (info.tags || []).map(t => t.tag || t),
+      language: info.language || 'japanese',
+      pageCount: info.files ? info.files.length : 0,
+    };
+  }
+
+  // Fetch multiple galleries in parallel
+  async fetchGalleries(ids) {
+    const results = await Promise.all(
+      ids.map(async (id) => {
+        const info = await this.fetchGalleryInfo(id);
+        return this.galleryInfoToManga(info);
+      })
+    );
+    return results.filter(r => r !== null);
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // Build search URL
-      let searchUrl = `${this.baseUrl}/search.html?${encodeURIComponent(query || '')}`;
+      // For search, we need to use the search nozomi files
+      // Format: search/query-language.nozomi
+      const perPage = 25;
+      const start = (page - 1) * perPage;
       
-      // Add language filter
+      let searchPath = 'index-all.nozomi';
+      
+      if (query && query.trim()) {
+        // Search by query - use tag search if it looks like a tag
+        const cleanQuery = query.trim().toLowerCase().replace(/\s+/g, '_');
+        // Try tag search first
+        searchPath = `tag/${cleanQuery}-all.nozomi`;
+      }
+      
       if (language && language !== 'all') {
+        searchPath = searchPath.replace('-all.nozomi', `-${language}.nozomi`);
+      }
+      
+      const ids = await this.fetchNozomi(searchPath, start, perPage);
+      if (ids.length === 0) {
+        // Fallback to index if tag search fails
         if (query) {
-          searchUrl = `${this.baseUrl}/search.html?${encodeURIComponent(query + ' language:' + language)}`;
-        } else {
-          searchUrl = `${this.baseUrl}/index-${language}.html`;
+          const fallbackIds = await this.fetchNozomi('index-all.nozomi', start, perPage);
+          return this.fetchGalleries(fallbackIds);
         }
+        return [];
       }
       
-      // Add page
-      if (page > 1) {
-        if (searchUrl.includes('search.html')) {
-          searchUrl = searchUrl.replace('.html', `-${page}.html`);
-        } else {
-          searchUrl = searchUrl.replace('.html', `-${page}.html`);
-        }
-      }
-      
-      const html = await this.fetchWithBrowser(searchUrl);
-      if (!html) return [];
-      
-      return this.parseGalleryListFromHtml(html);
+      return this.fetchGalleries(ids);
     } catch (e) {
       console.error('[Hitomi] Search error:', e.message);
       return [];
@@ -245,32 +284,25 @@ export class HitomiScraper extends BaseScraper {
 
   async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // Defensive: if tags is not an array (e.g., called with sort string), reset it
-      if (!Array.isArray(tags)) {
-        tags = [];
-      }
-      if (!Array.isArray(excludeTags)) {
-        excludeTags = [];
-      }
+      if (!Array.isArray(tags)) tags = [];
+      if (!Array.isArray(excludeTags)) excludeTags = [];
       
-      // Hitomi popular page - uses week/month for more results
-      // today has fewer, week/month have more sorted by popularity
-      const period = 'week'; // 'today', 'week', 'month', 'year'
+      const perPage = 25;
+      const start = (page - 1) * perPage;
       const lang = (language && language !== 'all') ? language : 'all';
       
-      // URL format: /popular/week-all.html or /popular/week-all-2.html for page 2
-      let url = `${this.baseUrl}/popular/${period}-${lang}.html`;
+      // Popular uses different nozomi path
+      const path = `popular/week-${lang}.nozomi`;
       
-      // Add page number (Hitomi uses 1-indexed pages in URL)
-      if (page > 1) {
-        url = url.replace('.html', `-${page}.html`);
+      console.log(`[Hitomi] Fetching popular page ${page}: ${path}`);
+      const ids = await this.fetchNozomi(path, start, perPage);
+      
+      if (ids.length === 0) {
+        console.log('[Hitomi] No IDs from popular, trying fallback');
+        return [];
       }
       
-      console.log(`[Hitomi] Fetching popular page ${page}: ${url}`);
-      const html = await this.fetchWithBrowser(url, '.gallery-content', 20000);
-      if (!html) return [];
-      
-      const results = this.parseGalleryListFromHtml(html);
+      const results = await this.fetchGalleries(ids);
       console.log(`[Hitomi] Got ${results.length} results from popular page ${page}`);
       return results;
     } catch (e) {
@@ -281,22 +313,21 @@ export class HitomiScraper extends BaseScraper {
 
   async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
     try {
-      // Hitomi index page (latest uploads)
+      const perPage = 25;
+      const start = (page - 1) * perPage;
       const lang = (language && language !== 'all') ? language : 'all';
       
-      // URL format: /index-all.html or /index-all-2.html for page 2
-      let url = `${this.baseUrl}/index-${lang}.html`;
+      const path = `index-${lang}.nozomi`;
       
-      // Add page number
-      if (page > 1) {
-        url = url.replace('.html', `-${page}.html`);
+      console.log(`[Hitomi] Fetching latest page ${page}: ${path}`);
+      const ids = await this.fetchNozomi(path, start, perPage);
+      
+      if (ids.length === 0) {
+        console.log('[Hitomi] No IDs from latest');
+        return [];
       }
       
-      console.log(`[Hitomi] Fetching latest page ${page}: ${url}`);
-      const html = await this.fetchWithBrowser(url, '.gallery-content', 20000);
-      if (!html) return [];
-      
-      const results = this.parseGalleryListFromHtml(html);
+      const results = await this.fetchGalleries(ids);
       console.log(`[Hitomi] Got ${results.length} results from latest page ${page}`);
       return results;
     } catch (e) {
@@ -309,97 +340,13 @@ export class HitomiScraper extends BaseScraper {
     const gid = id.replace('hitomi:', '');
     
     try {
-      // Try to find the gallery page - we need to search for it
-      const types = ['doujinshi', 'manga', 'artistcg', 'gamecg', 'anime'];
-      let html = null;
-      let foundType = 'doujinshi';
+      const info = await this.fetchGalleryInfo(gid);
+      if (!info) return null;
       
-      // First try reader page which has consistent URL
-      html = await this.fetchWithBrowser(`${this.baseUrl}/reader/${gid}.html`, '.img-url', 20000);
+      const manga = this.galleryInfoToManga(info);
+      manga.isLongStrip = false;
       
-      if (!html) {
-        // Try gallery pages
-        for (const type of types) {
-          // We don't know the full URL, so search for it
-          const searchHtml = await this.fetchWithBrowser(
-            `${this.baseUrl}/search.html?${gid}`,
-            '.gallery-content',
-            20000
-          );
-          if (searchHtml && searchHtml.includes(`-${gid}.html`)) {
-            // Found it, extract the full URL
-            const urlMatch = searchHtml.match(new RegExp(`href="(/[^"]*-${gid}\\.html)"`));
-            if (urlMatch) {
-              html = await this.fetchWithBrowser(`${this.baseUrl}${urlMatch[1]}`, '.dj-content', 20000);
-              if (html) {
-                foundType = urlMatch[1].split('/')[1] || 'doujinshi';
-                break;
-              }
-            }
-          }
-        }
-      }
-      
-      if (!html) return null;
-      
-      // Parse title
-      const titleMatch = html.match(/<h1[^>]*>(?:<a[^>]*>)?([^<]+)/i);
-      const title = titleMatch ? titleMatch[1].trim() : `Gallery ${gid}`;
-      
-      // Parse cover
-      const coverMatch = html.match(/(?:data-src|src)="([^"]*(?:tn\.hitomi\.la|bigtn)[^"]*)"/i);
-      let cover = coverMatch ? coverMatch[1] : '';
-      if (cover.startsWith('//')) cover = 'https:' + cover;
-      
-      // Parse metadata from dj-content table
-      const tags = [];
-      const artists = [];
-      const groups = [];
-      const parodies = [];
-      const characters = [];
-      let language = 'japanese';
-      
-      // Extract table rows
-      const tableMatch = html.match(/<table[^>]*class="[^"]*dj-desc[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
-      if (tableMatch) {
-        const rows = tableMatch[1].match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-        for (const row of rows) {
-          const labelMatch = row.match(/<td[^>]*>([^<]+)/i);
-          const label = labelMatch ? labelMatch[1].toLowerCase().trim() : '';
-          
-          const valueMatches = row.match(/<a[^>]*>([^<]+)<\/a>/gi) || [];
-          const values = valueMatches.map(m => m.replace(/<[^>]+>/g, '').trim());
-          
-          if (label.includes('artist')) artists.push(...values);
-          else if (label.includes('group')) groups.push(...values);
-          else if (label.includes('series') || label.includes('parody')) parodies.push(...values);
-          else if (label.includes('character')) characters.push(...values);
-          else if (label.includes('tag')) tags.push(...values);
-          else if (label.includes('language')) language = values[0]?.toLowerCase() || 'japanese';
-        }
-      }
-      
-      // Get page count from thumbnail list or reader
-      const pageCountMatch = html.match(/(\d+)\s*(?:pages?|images?)/i);
-      const pageCount = pageCountMatch ? parseInt(pageCountMatch[1]) : 0;
-
-      return {
-        id,
-        sourceId: 'hitomi',
-        slug: gid,
-        title,
-        cover: this.proxyUrl(cover),
-        tags,
-        artists,
-        groups,
-        parodies,
-        characters,
-        language,
-        pageCount,
-        type: foundType,
-        isAdult: true,
-        isLongStrip: false,
-      };
+      return manga;
     } catch (e) {
       console.error('[Hitomi] Detail error:', e.message);
       return null;
@@ -421,112 +368,26 @@ export class HitomiScraper extends BaseScraper {
     const gid = mangaId.replace('hitomi:', '');
     
     try {
-      // Get the reader page with Playwright
-      const html = await this.fetchWithBrowser(`${this.baseUrl}/reader/${gid}.html`, '.img-url', 30000);
-      
-      if (!html) {
-        console.log(`[Hitomi] Could not load reader for gallery ${gid}`);
+      const info = await this.fetchGalleryInfo(gid);
+      if (!info || !info.files) {
+        console.log(`[Hitomi] No gallery info for ${gid}`);
         return [];
       }
       
+      const gg = await this.getGgData();
       const pages = [];
       
-      // Hitomi reader stores image URLs in JavaScript
-      // Look for the galleryinfo variable or image URLs in the page
-      
-      // Method 1: Extract from img-url divs (reader page)
-      const imgUrlRegex = /class="img-url"[^>]*>([^<]+)</gi;
-      let match;
-      while ((match = imgUrlRegex.exec(html)) !== null) {
-        let src = match[1].trim();
-        if (src.startsWith('//')) src = 'https:' + src;
-        if (src && src.match(/\.(jpg|jpeg|png|gif|webp|avif)/i)) {
-          pages.push({
-            page: pages.length + 1,
-            url: this.proxyUrl(src),
-            originalUrl: src,
-          });
-        }
+      for (let i = 0; i < info.files.length; i++) {
+        const file = info.files[i];
+        const imageUrl = this.buildImageUrl(file, gg);
+        
+        pages.push({
+          page: i + 1,
+          url: this.proxyUrl(imageUrl),
+          originalUrl: imageUrl,
+        });
       }
       
-      // Method 2: Extract from galleryinfo JavaScript variable
-      if (pages.length === 0) {
-        const galleryInfoMatch = html.match(/var\s+galleryinfo\s*=\s*(\{[\s\S]*?\});/);
-        if (galleryInfoMatch) {
-          try {
-            const info = JSON.parse(galleryInfoMatch[1]);
-            if (info.files && Array.isArray(info.files)) {
-              for (let i = 0; i < info.files.length; i++) {
-                const file = info.files[i];
-                const hash = file.hash;
-                const haswebp = file.haswebp;
-                const hasavif = file.hasavif;
-                
-                // Determine extension
-                let ext = 'webp';
-                if (hasavif) ext = 'avif';
-                else if (haswebp) ext = 'webp';
-                else if (file.name) {
-                  const extMatch = file.name.match(/\.(\w+)$/);
-                  if (extMatch) ext = extMatch[1];
-                }
-                
-                // Build image URL using Hitomi's subdomain system
-                const hashDir = hash.slice(-1) + '/' + hash.slice(-3, -1);
-                
-                // Determine subdomain
-                let subdomain = 'a';
-                const g = parseInt(hash.slice(-3, -1), 16);
-                if (!isNaN(g)) {
-                  subdomain = String.fromCharCode(97 + (g % 3));
-                }
-                
-                const imageUrl = `https://${subdomain}a.hitomi.la/${ext}/${hashDir}/${hash}.${ext}`;
-                
-                pages.push({
-                  page: i + 1,
-                  url: this.proxyUrl(imageUrl),
-                  originalUrl: imageUrl,
-                });
-              }
-            }
-          } catch (e) {
-            console.error('[Hitomi] Failed to parse galleryinfo:', e.message);
-          }
-        }
-      }
-      
-      // Method 3: Extract from thumbnail images and convert to full size
-      if (pages.length === 0) {
-        const thumbRegex = /(?:data-src|src)="([^"]*(?:tn\.hitomi\.la|smalltn|bigtn)[^"]*)"/gi;
-        while ((match = thumbRegex.exec(html)) !== null) {
-          let src = match[1];
-          if (src.startsWith('//')) src = 'https:' + src;
-          
-          // Convert thumbnail to full image
-          // tn.hitomi.la/smalltn/hash/hash/hash.jpg -> aa.hitomi.la/webp/hash/hash/hash.webp
-          if (src.includes('smalltn') || src.includes('bigtn')) {
-            // Extract hash from thumbnail URL
-            const hashMatch = src.match(/\/([0-9a-f]{64})\./i);
-            if (hashMatch) {
-              const hash = hashMatch[1];
-              const hashDir = hash.slice(-1) + '/' + hash.slice(-3, -1);
-              const g = parseInt(hash.slice(-3, -1), 16);
-              const subdomain = String.fromCharCode(97 + (g % 3));
-              src = `https://${subdomain}a.hitomi.la/webp/${hashDir}/${hash}.webp`;
-            }
-          }
-          
-          if (src.match(/\.(jpg|jpeg|png|gif|webp|avif)/i)) {
-            pages.push({
-              page: pages.length + 1,
-              url: this.proxyUrl(src),
-              originalUrl: src,
-            });
-          }
-        }
-      }
-
       console.log(`[Hitomi] Found ${pages.length} pages for gallery ${gid}`);
       return pages;
     } catch (e) {

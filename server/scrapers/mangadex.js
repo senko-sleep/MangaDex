@@ -64,17 +64,21 @@ export class MangaDexScraper extends BaseScraper {
         params.append('order[followedCount]', 'desc');
       }
 
-      // Content ratings
+      // Content ratings based on adult filter settings
       if (adultOnly) {
+        // Adult-only mode: only erotica and pornographic
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      } else if (includeAdult) {
+        // Include all content ratings
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
       } else {
+        // Safe mode: only safe and suggestive
         params.append('contentRating[]', 'safe');
         params.append('contentRating[]', 'suggestive');
-        if (includeAdult) {
-          params.append('contentRating[]', 'erotica');
-          params.append('contentRating[]', 'pornographic');
-        }
       }
 
       if (query) params.set('title', query);
@@ -111,31 +115,38 @@ export class MangaDexScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, sort = 'popular', adultOnly = false) {
+  async getPopular(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, sort = 'popular', adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
     return this.search('', page, includeAdult, [], [], null, adultOnly, null, sort);
   }
 
-  async getLatest(page = 1, includeAdult = true, adultOnly = false) {
+  async getLatest(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
     try {
       const offset = (page - 1) * 50;
-      // Build params with multiple content ratings
       const params = new URLSearchParams();
-      params.append('limit', '50'); // Max allowed
+      params.append('limit', '50');
       params.append('offset', String(offset));
       params.append('includes[]', 'cover_art');
       params.append('order[latestUploadedChapter]', 'desc');
       params.append('hasAvailableChapters', 'true');
 
+      // Content ratings based on adult filter settings
       if (adultOnly) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      } else if (includeAdult) {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
       } else {
         params.append('contentRating[]', 'safe');
         params.append('contentRating[]', 'suggestive');
-        if (includeAdult) {
-          params.append('contentRating[]', 'erotica');
-          params.append('contentRating[]', 'pornographic');
-        }
       }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
@@ -156,16 +167,18 @@ export class MangaDexScraper extends BaseScraper {
       params.append('order[createdAt]', 'desc');
       params.append('hasAvailableChapters', 'true');
 
+      // Content ratings based on adult filter settings
       if (adultOnly) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      } else if (includeAdult) {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
       } else {
         params.append('contentRating[]', 'safe');
         params.append('contentRating[]', 'suggestive');
-        if (includeAdult) {
-          params.append('contentRating[]', 'erotica');
-          params.append('contentRating[]', 'pornographic');
-        }
       }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);
@@ -186,16 +199,18 @@ export class MangaDexScraper extends BaseScraper {
       params.append('order[rating]', 'desc');
       params.append('hasAvailableChapters', 'true');
 
+      // Content ratings based on adult filter settings
       if (adultOnly) {
+        params.append('contentRating[]', 'erotica');
+        params.append('contentRating[]', 'pornographic');
+      } else if (includeAdult) {
+        params.append('contentRating[]', 'safe');
+        params.append('contentRating[]', 'suggestive');
         params.append('contentRating[]', 'erotica');
         params.append('contentRating[]', 'pornographic');
       } else {
         params.append('contentRating[]', 'safe');
         params.append('contentRating[]', 'suggestive');
-        if (includeAdult) {
-          params.append('contentRating[]', 'erotica');
-          params.append('contentRating[]', 'pornographic');
-        }
       }
 
       const res = await this.client.get(`${this.baseUrl}/manga?${params}`);

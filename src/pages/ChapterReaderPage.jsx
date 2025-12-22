@@ -16,19 +16,74 @@ const DEFAULT_SETTINGS = {
   fitMode: 'contain',     // width, height, original, contain (fit to screen)
   backgroundColor: '#000000',
   gapSize: 0,             // gap between pages in scroll mode
-  showProgress: true,
-  autoScroll: false,
-  autoScrollSpeed: 50,
   preloadPages: 3,
+  tapToNavigate: true,    // tap left/right side to navigate
+  autoNextChapter: true,  // auto-navigate to next chapter at end
+  // UI visibility: 'always', 'hover', 'never'
+  headerVisibility: 'hover',
+  footerVisibility: 'always',
+  navButtonsVisibility: 'hover',
+  pageNumberVisibility: 'always',
 };
 
-// Background color presets
+// Background presets with creative themes
 const BG_PRESETS = [
-  { name: 'Black', value: '#000000' },
-  { name: 'Dark Gray', value: '#18181b' },
-  { name: 'Gray', value: '#27272a' },
-  { name: 'Sepia', value: '#1a1814' },
-  { name: 'Dark Blue', value: '#0f172a' },
+  { 
+    name: 'Blur', 
+    value: 'blur', 
+    type: 'dynamic',
+    preview: 'linear-gradient(135deg, #374151 0%, #1f2937 50%, #111827 100%)',
+    description: 'Blurred manga page'
+  },
+  { 
+    name: 'Void', 
+    value: '#000000', 
+    type: 'solid',
+    preview: '#000000',
+    description: 'Pure black'
+  },
+  { 
+    name: 'Midnight', 
+    value: 'linear-gradient(180deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)', 
+    type: 'gradient',
+    preview: 'linear-gradient(180deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+    description: 'Deep night sky'
+  },
+  { 
+    name: 'Ember', 
+    value: 'linear-gradient(180deg, #1a0a0a 0%, #2d1810 50%, #1a0505 100%)', 
+    type: 'gradient',
+    preview: 'linear-gradient(180deg, #1a0a0a 0%, #2d1810 50%, #1a0505 100%)',
+    description: 'Warm ember glow'
+  },
+  { 
+    name: 'Forest', 
+    value: 'linear-gradient(180deg, #0a1a0a 0%, #0d2818 50%, #051a0a 100%)', 
+    type: 'gradient',
+    preview: 'linear-gradient(180deg, #0a1a0a 0%, #0d2818 50%, #051a0a 100%)',
+    description: 'Deep forest'
+  },
+  { 
+    name: 'Ocean', 
+    value: 'linear-gradient(180deg, #0a0a1a 0%, #0d1828 50%, #050a1a 100%)', 
+    type: 'gradient',
+    preview: 'linear-gradient(180deg, #0a0a1a 0%, #0d1828 50%, #050a1a 100%)',
+    description: 'Deep ocean'
+  },
+  { 
+    name: 'Parchment', 
+    value: 'linear-gradient(180deg, #1a1814 0%, #2a2520 50%, #1a1610 100%)', 
+    type: 'gradient',
+    preview: 'linear-gradient(180deg, #1a1814 0%, #2a2520 50%, #1a1610 100%)',
+    description: 'Old paper feel'
+  },
+  { 
+    name: 'Paper', 
+    value: '#f5f5f4', 
+    type: 'solid',
+    preview: '#f5f5f4',
+    description: 'Clean white'
+  },
 ];
 
 // Settings Panel Component
@@ -154,22 +209,46 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
             </div>
           </div>
 
-          {/* Background Color */}
+          {/* Background Theme */}
           <div>
-            <label className="text-sm font-medium text-zinc-400 mb-3 block">Background</label>
-            <div className="flex gap-2">
+            <label className="text-sm font-medium text-zinc-400 mb-3 block">Background Theme</label>
+            <div className="grid grid-cols-4 gap-2">
               {BG_PRESETS.map(preset => (
                 <button
                   key={preset.value}
                   onClick={() => updateSetting('backgroundColor', preset.value)}
-                  className={`w-10 h-10 rounded-xl border-2 transition-all ${
+                  className={`relative group rounded-xl border-2 transition-all overflow-hidden ${
                     settings.backgroundColor === preset.value 
-                      ? 'border-orange-500 scale-110' 
-                      : 'border-transparent hover:border-zinc-600'
+                      ? 'border-orange-500 ring-2 ring-orange-500/30' 
+                      : 'border-zinc-700 hover:border-zinc-500'
                   }`}
-                  style={{ backgroundColor: preset.value }}
-                  title={preset.name}
-                />
+                  title={preset.description}
+                >
+                  {/* Visual Preview */}
+                  <div 
+                    className="w-full aspect-square"
+                    style={{ background: preset.preview }}
+                  >
+                    {/* Blur preview shows a mini page icon */}
+                    {preset.type === 'dynamic' && (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-6 h-8 bg-white/20 rounded-sm backdrop-blur-sm border border-white/10" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Label */}
+                  <div className={`text-[10px] font-medium py-1 text-center ${
+                    preset.value === '#f5f5f4' ? 'bg-zinc-200 text-zinc-800' : 'bg-zinc-800/80 text-zinc-300'
+                  }`}>
+                    {preset.name}
+                  </div>
+                  
+                  {/* Selected indicator */}
+                  {settings.backgroundColor === preset.value && (
+                    <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500" />
+                  )}
+                </button>
               ))}
             </div>
           </div>
@@ -179,29 +258,103 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
             <label className="text-sm font-medium text-zinc-400 mb-3 block">
               Page Gap: {settings.gapSize}px
             </label>
-            <input
-              type="range"
-              min="0"
-              max="50"
-              value={settings.gapSize}
-              onChange={(e) => updateSetting('gapSize', parseInt(e.target.value))}
-              className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
-            />
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={settings.gapSize}
+                onChange={(e) => updateSetting('gapSize', parseInt(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              />
           </div>
 
-          {/* Progress Bar Toggle */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">Show Progress Bar</span>
-            <button
-              onClick={() => updateSetting('showProgress', !settings.showProgress)}
-              className={`w-12 h-6 rounded-full transition-colors ${
-                settings.showProgress ? 'bg-orange-500' : 'bg-zinc-700'
-              }`}
-            >
-              <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                settings.showProgress ? 'translate-x-6' : 'translate-x-0.5'
-              }`} />
-            </button>
+          {/* Preload Pages */}
+          <div>
+            <label className="text-sm font-medium text-zinc-400 mb-3 block">
+              Preload Pages: {settings.preloadPages}
+            </label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={settings.preloadPages}
+                onChange={(e) => updateSetting('preloadPages', parseInt(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              />
+          </div>
+
+          {/* UI Visibility Settings */}
+          <div>
+            <label className="text-sm font-medium text-zinc-400 mb-3 block">UI Visibility</label>
+            <div className="space-y-3">
+              {[
+                { key: 'headerVisibility', label: 'Header', desc: 'Top bar with chapter info' },
+                { key: 'footerVisibility', label: 'Progress Bar', desc: 'Bottom page slider' },
+                { key: 'navButtonsVisibility', label: 'Nav Buttons', desc: 'Left/right arrows' },
+                { key: 'pageNumberVisibility', label: 'Page Number', desc: 'Current page indicator' },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium text-zinc-300">{label}</span>
+                    <p className="text-xs text-zinc-500">{desc}</p>
+                  </div>
+                  <div className="flex bg-zinc-800 rounded-lg p-0.5">
+                    {['always', 'hover', 'never'].map(opt => (
+                      <button
+                        key={opt}
+                        onClick={() => updateSetting(key, opt)}
+                        className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                          settings[key] === opt 
+                            ? 'bg-orange-500 text-white' 
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle Settings */}
+          <div className="space-y-3">
+            {/* Tap to Navigate */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-zinc-300">Tap to Navigate</span>
+                <p className="text-xs text-zinc-500">Tap sides of screen to turn pages</p>
+              </div>
+              <button
+                onClick={() => updateSetting('tapToNavigate', !settings.tapToNavigate)}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  settings.tapToNavigate ? 'bg-orange-500' : 'bg-zinc-700'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                  settings.tapToNavigate ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {/* Auto Next Chapter */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-zinc-300">Auto Next Chapter</span>
+                <p className="text-xs text-zinc-500">Go to next chapter at end</p>
+              </div>
+              <button
+                onClick={() => updateSetting('autoNextChapter', !settings.autoNextChapter)}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  settings.autoNextChapter ? 'bg-orange-500' : 'bg-zinc-700'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                  settings.autoNextChapter ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
           </div>
 
           {/* Reset Button */}
@@ -218,35 +371,36 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
   );
 }
 
-// Progress Bar Component
-function ProgressBar({ current, total, onSeek }) {
-  const progressPercent = ((current + 1) / total) * 100;
+
+// Helper to get image fit styles for page modes
+const getPageImageStyle = (fitMode, isDouble = false) => {
+  const baseMaxWidth = isDouble ? 'calc(50vw - 2rem)' : 'calc(100vw - 4rem)';
+  const baseMaxHeight = 'calc(100vh - 9rem)';
   
-  return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4">
-      <div className="max-w-4xl mx-auto glass rounded-2xl p-3">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium w-12 text-center">{current + 1}</span>
-          <div 
-            className="flex-1 h-2 bg-zinc-800 rounded-full cursor-pointer overflow-hidden"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const percent = x / rect.width;
-              onSeek(Math.floor(percent * total));
-            }}
-          >
-            <div 
-              className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full transition-all duration-150"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <span className="text-sm font-medium w-12 text-center text-zinc-500">{total}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+  switch (fitMode) {
+    case 'width':
+      return {
+        className: 'w-full h-auto object-contain select-none',
+        style: { maxWidth: isDouble ? '50vw' : '100vw' }
+      };
+    case 'height':
+      return {
+        className: 'h-full w-auto object-contain select-none',
+        style: { maxHeight: baseMaxHeight }
+      };
+    case 'original':
+      return {
+        className: 'object-none select-none',
+        style: { maxWidth: 'none', maxHeight: 'none' }
+      };
+    case 'contain':
+    default:
+      return {
+        className: 'object-contain select-none',
+        style: { maxHeight: baseMaxHeight, maxWidth: baseMaxWidth }
+      };
+  }
+};
 
 // Page Image Component with loading state and retry
 function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageIndex }) {
@@ -295,7 +449,13 @@ function PageImage({ src, alt, fitMode, onLoad, isVisible, onImageError, pageInd
         <img
           src={imageSrc}
           alt={alt}
-          className={`w-full h-auto max-w-5xl mx-auto select-none ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+          className={`select-none ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 ${
+            fitMode === 'width' ? 'w-full h-auto' :
+            fitMode === 'height' ? 'h-screen w-auto' :
+            fitMode === 'original' ? 'max-w-none' :
+            'w-full h-auto max-w-5xl mx-auto' // contain (default)
+          }`}
+          style={fitMode === 'original' ? { maxWidth: 'none' } : {}}
           onLoad={() => { setLoaded(true); onLoad?.(); }}
           onError={handleError}
           loading={isVisible ? 'eager' : 'lazy'}
@@ -316,7 +476,8 @@ export default function ChapterReaderPage() {
   const [chapters, setChapters] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showUI, setShowUI] = useState(true);
+  const [showHeader, setShowHeader] = useState(false);
+  const [showFooter, setShowFooter] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
@@ -436,8 +597,8 @@ export default function ChapterReaderPage() {
   useEffect(() => {
     if (pages.length === 0) return;
     
-    // Preload next 3 pages
-    const preloadCount = 3;
+    // Preload next N pages based on settings
+    const preloadCount = settings.preloadPages || 3;
     for (let i = 1; i <= preloadCount; i++) {
       const nextIdx = currentPage + i;
       if (nextIdx < pages.length) {
@@ -451,7 +612,7 @@ export default function ChapterReaderPage() {
       const img = new Image();
       img.src = pages[currentPage - 1].url;
     }
-  }, [currentPage, pages]);
+  }, [currentPage, pages, settings.preloadPages]);
 
   const currentChapter = chapters.find(c => c.id === chapterId);
   const currentChapterNum = parseFloat(currentChapter?.chapter) || 0;
@@ -644,24 +805,29 @@ export default function ChapterReaderPage() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Auto-hide UI
+  // Hover zones for header/footer reveal
   useEffect(() => {
-    if (actualMode === 'scroll') return;
+    if (actualMode === 'scroll') {
+      setShowHeader(true);
+      setShowFooter(true);
+      return;
+    }
     
-    let timeout;
-    const handleMove = () => {
-      setShowUI(true);
-      clearTimeout(timeout);
-      timeout = setTimeout(() => setShowUI(false), 3000);
+    const handleMouseMove = (e) => {
+      const y = e.clientY;
+      const windowHeight = window.innerHeight;
+      
+      // Show header when mouse is in top 80px
+      setShowHeader(y < 80);
+      
+      // Show footer when mouse is in bottom 120px
+      setShowFooter(y > windowHeight - 120);
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('touchstart', handleMove);
+    window.addEventListener('mousemove', handleMouseMove);
     
     return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('touchstart', handleMove);
-      clearTimeout(timeout);
+      window.removeEventListener('mousemove', handleMouseMove);
     };
   }, [actualMode]);
 
@@ -674,23 +840,52 @@ export default function ChapterReaderPage() {
     );
   }
 
+  // Get the current page image URL for blur background
+  const currentPageUrl = pages[currentPage]?.url;
+  
+  // Determine if background is a gradient
+  const bg = settings.backgroundColor;
+  const isGradient = bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient');
+  const isBlur = bg === 'blur';
+
   return (
     <div 
       ref={containerRef}
-      className="min-h-screen text-white reader-page select-none"
-      style={{ backgroundColor: settings.backgroundColor }}
+      className="min-h-screen text-white reader-page select-none relative"
+      style={{ backgroundColor: isBlur || isGradient ? '#000000' : bg }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Header - Auto-hides in page modes to not block content */}
+      {/* Fixed background layer for gradients */}
+      {isGradient && (
+        <div 
+          className="fixed inset-0 z-0"
+          style={{ background: bg }}
+        />
+      )}
+      
+      {/* Blurred page background */}
+      {isBlur && currentPageUrl && (
+        <div 
+          className="fixed inset-0 z-0 bg-cover bg-center transition-all duration-500"
+          style={{
+            backgroundImage: `url(${currentPageUrl})`,
+            filter: 'blur(40px) brightness(0.25) saturate(1.2)',
+            transform: 'scale(1.15)',
+          }}
+        />
+      )}
+      {/* Header - Visibility based on settings */}
+      {settings.headerVisibility !== 'never' && (
       <header 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          actualMode === 'scroll' 
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+          settings.headerVisibility === 'always' || showHeader 
             ? 'translate-y-0 opacity-100' 
-            : (showUI ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0')
+            : '-translate-y-full opacity-0'
         }`}
+        onMouseEnter={() => settings.headerVisibility === 'hover' && setShowHeader(true)}
       >
-        <div className="bg-black/90 backdrop-blur-sm border-b border-zinc-800/50">
+        <div className="backdrop-blur-md bg-black/40">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             {/* Left */}
             <div className="flex items-center gap-3 min-w-0">
@@ -775,11 +970,12 @@ export default function ChapterReaderPage() {
           </div>
         </div>
       </header>
+      )}
 
       {/* Main Reader Area */}
       {actualMode === 'scroll' ? (
         // Scroll Mode (Webtoon)
-        <div className="max-w-4xl mx-auto pt-16" style={{ gap: `${settings.gapSize}px` }}>
+        <div className="max-w-4xl mx-auto pt-16 relative z-10" style={{ gap: `${settings.gapSize}px` }}>
           <div className="flex flex-col" style={{ gap: `${settings.gapSize}px` }}>
             {pages.map((p, i) => (
               <PageImage 
@@ -831,28 +1027,32 @@ export default function ChapterReaderPage() {
           </div>
         </div>
       ) : actualMode === 'double' ? (
-        // Double Page Mode
+        // Double Page Mode - Two pages side by side
         <div 
-          className="min-h-screen flex items-center justify-center pt-14 pb-24 px-12"
+          className="min-h-screen flex items-center justify-center pt-14 pb-24 px-12 relative z-10"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           {/* Left Navigation Button */}
-          <button
-            onClick={() => goPage(-1)}
-            disabled={currentPage === 0 && !prevChapter}
-            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
+          {settings.navButtonsVisibility !== 'never' && (
+            <button
+              onClick={() => goPage(-1)}
+              disabled={currentPage === 0 && !prevChapter}
+              className={`fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
+                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
+              }`}
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
 
-          <div className="flex items-center justify-center gap-1" style={{ maxHeight: 'calc(100vh - 9rem)' }}>
+          <div className="flex items-center justify-center gap-1" style={{ maxHeight: settings.fitMode === 'original' ? 'none' : 'calc(100vh - 9rem)' }}>
             {pages[currentPage] && (
               <img
                 src={pages[currentPage].url}
                 alt={`Page ${currentPage + 1}`}
-                className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
+                className={getPageImageStyle(settings.fitMode, true).className}
+                style={getPageImageStyle(settings.fitMode, true).style}
                 draggable={false}
                 onError={() => handleImageError(pages[currentPage].url, currentPage)}
                 referrerPolicy="no-referrer"
@@ -862,8 +1062,8 @@ export default function ChapterReaderPage() {
               <img
                 src={pages[currentPage + 1].url}
                 alt={`Page ${currentPage + 2}`}
-                className="object-contain select-none"
-                style={{ maxHeight: 'calc(100vh - 9rem)', maxWidth: 'calc(50vw - 2rem)' }}
+                className={getPageImageStyle(settings.fitMode, true).className}
+                style={getPageImageStyle(settings.fitMode, true).style}
                 draggable={false}
                 onError={() => handleImageError(pages[currentPage + 1].url, currentPage + 1)}
                 referrerPolicy="no-referrer"
@@ -872,39 +1072,44 @@ export default function ChapterReaderPage() {
           </div>
 
           {/* Right Navigation Button */}
-          <button
-            onClick={() => goPage(1)}
-            disabled={currentPage >= pages.length - 1 && !nextChapter}
-            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
+          {settings.navButtonsVisibility !== 'never' && (
+            <button
+              onClick={() => goPage(1)}
+              disabled={currentPage >= pages.length - 1 && !nextChapter}
+              className={`fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
+                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
+              }`}
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
         </div>
       ) : (
         // Single Page Mode - Clean view with navigation buttons
         <div 
-          className="min-h-screen flex items-center justify-center pt-14 pb-24"
+          className="min-h-screen flex items-center justify-center pt-14 pb-24 relative z-10"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           {/* Left Navigation Button */}
-          <button
-            onClick={() => goPage(-1)}
-            disabled={currentPage === 0 && !prevChapter}
-            className="fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
+          {settings.navButtonsVisibility !== 'never' && (
+            <button
+              onClick={() => goPage(-1)}
+              disabled={currentPage === 0 && !prevChapter}
+              className={`fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
+                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
+              }`}
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
 
           {pages[currentPage] && (
             <img
               src={pages[currentPage].url}
               alt={`Page ${currentPage + 1}`}
-              className="select-none object-contain"
-              style={{ 
-                maxHeight: 'calc(100vh - 9rem)',
-                maxWidth: 'calc(100vw - 4rem)'
-              }}
+              className={getPageImageStyle(settings.fitMode, false).className}
+              style={getPageImageStyle(settings.fitMode, false).style}
               draggable={false}
               onError={() => handleImageError(pages[currentPage].url, currentPage)}
               referrerPolicy="no-referrer"
@@ -912,20 +1117,42 @@ export default function ChapterReaderPage() {
           )}
 
           {/* Right Navigation Button */}
-          <button
-            onClick={() => goPage(1)}
-            disabled={currentPage === pages.length - 1 && !nextChapter}
-            className="fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
+          {settings.navButtonsVisibility !== 'never' && (
+            <button
+              onClick={() => goPage(1)}
+              disabled={currentPage === pages.length - 1 && !nextChapter}
+              className={`fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
+                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
+              }`}
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
         </div>
       )}
 
-      {/* Page Navigation for Page Modes - Always visible */}
-      {actualMode !== 'scroll' && (
-        <div className="fixed bottom-0 left-0 right-0 z-40">
-          <div className="bg-black/90 backdrop-blur-sm border-t border-zinc-800/50 py-4 px-4">
+      {/* Floating Page Number - Visibility based on settings */}
+      {actualMode !== 'scroll' && settings.pageNumberVisibility !== 'never' && (
+        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-black/60 backdrop-blur-sm text-sm font-medium transition-opacity duration-200 ${
+          settings.pageNumberVisibility === 'always' || (!showFooter && settings.pageNumberVisibility === 'hover')
+            ? 'opacity-100' 
+            : 'opacity-0'
+        }`}>
+          {currentPage + 1} / {pages.length}
+        </div>
+      )}
+
+      {/* Page Navigation for Page Modes - Visibility based on settings */}
+      {actualMode !== 'scroll' && settings.footerVisibility !== 'never' && (
+        <div 
+          className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-200 ${
+            settings.footerVisibility === 'always' || showFooter 
+              ? 'translate-y-0 opacity-100' 
+              : 'translate-y-full opacity-0'
+          }`}
+          onMouseEnter={() => settings.footerVisibility === 'hover' && setShowFooter(true)}
+        >
+          <div className="py-4 px-4 backdrop-blur-md bg-black/40">
             <div className="max-w-4xl mx-auto">
               {/* Mobile Chapter Nav */}
               <div className="flex md:hidden items-center justify-between mb-3">
@@ -1038,6 +1265,7 @@ export default function ChapterReaderPage() {
           isLongStrip={isLongStrip}
         />
       )}
+
 
     </div>
   );

@@ -84,18 +84,21 @@ class TestIMHentaiScraper {
     const results = [];
     
     // Match thumb divs - IMHentai structure
-    const thumbRegex = /<div[^>]*class="thumb"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/gi;
+    // Need to capture more to get the caption div which has the title
+    const thumbRegex = /<div[^>]*class="thumb"[^>]*>([\s\S]*?)<div\s+class="caption"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/gi;
     const linkRegex = /<a[^>]*href="\/gallery\/(\d+)\/"[^>]*>/i;
-    const imgRegex = /<img[^>]*data-src="([^"]*)"[^>]*>/i;
-    const titleRegex = /<h2[^>]*class="gallery_title"[^>]*><a[^>]*>([^<]*)<\/a><\/h2>/i;
+    const imgRegex = /<img[^>]*(?:data-src|src)="([^"]*)"[^>]*>/i;
+    // Title is in the caption group (second capture group)
+    const titleRegex = /<a[^>]*>([^<]+)<\/a>/i;
     const categoryRegex = /class="thumb_cat"[^>]*>([^<]*)<\/a>/i;
     
     let match;
     while ((match = thumbRegex.exec(html)) !== null) {
-      const content = match[1];
+      const content = match[1]; // Main thumb content
+      const captionContent = match[2]; // Caption div content with title
       const linkMatch = linkRegex.exec(content);
       const imgMatch = imgRegex.exec(content);
-      const titleMatch = titleRegex.exec(content);
+      const titleMatch = titleRegex.exec(captionContent); // Extract title from caption
       const catMatch = categoryRegex.exec(content);
       
       if (linkMatch) {
@@ -333,6 +336,38 @@ const tests = [
     }
     
     console.log(`   Found ${results.length} search results`);
+  }),
+
+  test('Can search for "futanari" with proper URL parameters', async () => {
+    const source = new TestIMHentaiScraper();
+    
+    // Use the exact URL format that the website expects
+    const url = `${source.baseUrl}/search/?lt=1&pp=0&m=1&d=1&w=1&i=1&a=1&g=1&key=futanari&apply=Search&en=1&jp=1&es=1&fr=1&kr=1&de=1&ru=1&dl=0&tr=0`;
+    console.log(`   Testing URL: ${url}`);
+    
+    const html = await source.fetchHtml(url);
+    
+    // Debug: Extract first thumb to see structure
+    const firstThumbMatch = /<div[^>]*class="thumb"[^>]*>([\s\S]{0,2000}?)<div[^>]*class="thumb"/i.exec(html);
+    if (firstThumbMatch) {
+      const sample = firstThumbMatch[1].substring(0, 800);
+      console.log(`   Sample HTML structure:\n${sample.substring(0, 400)}...`);
+    }
+    
+    const results = source.parseGalleryList(html);
+    
+    if (!Array.isArray(results)) {
+      throw new Error('Expected results to be an array');
+    }
+    
+    console.log(`   Found ${results.length} futanari results`);
+    
+    if (results.length === 0) {
+      throw new Error('No futanari results found - the search may not be working properly');
+    }
+    
+    // Verify the results contain futanari tag
+    console.log(`   First result: ${results[0].title}`);
   }),
 
   test('Can get gallery details', async () => {
