@@ -897,35 +897,72 @@ export default function ChapterReaderPage() {
             
             {/* Center - Chapter Navigation */}
             {filteredChapters.length > 1 && (
-              <div className="hidden md:flex items-center gap-2">
-                <button
-                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                  disabled={!prevChapter}
-                  className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Previous Chapter"
-                >
-                  <SkipBack className="w-5 h-5" />
-                </button>
-                
-                <select
-                  value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
-                  onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
-                  className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
-                >
-                  {filteredChapters.map(c => (
-                    <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
-                  ))}
-                </select>
-                
-                <button
-                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                  disabled={!nextChapter}
-                  className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Next Chapter"
-                >
-                  <SkipForward className="w-5 h-5" />
-                </button>
-              </div>
+              <>
+                {/* Mobile */}
+                <div className="flex md:hidden items-center gap-2">
+                  <button
+                    onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!prevChapter}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Previous Chapter"
+                  >
+                    <SkipBack className="w-5 h-5" />
+                  </button>
+
+                  <div className="relative flex-1 min-w-0">
+                    <select
+                      value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
+                      onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
+                      className="h-10 w-full pl-3 pr-8 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500 appearance-none"
+                    >
+                      {filteredChapters.map(c => (
+                        <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  </div>
+
+                  <button
+                    onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!nextChapter}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Next Chapter"
+                  >
+                    <SkipForward className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Desktop */}
+                <div className="hidden md:flex items-center gap-2">
+                  <button
+                    onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!prevChapter}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Previous Chapter"
+                  >
+                    <SkipBack className="w-5 h-5" />
+                  </button>
+                  
+                  <select
+                    value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
+                    onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
+                    className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    {filteredChapters.map(c => (
+                      <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
+                    ))}
+                  </select>
+                  
+                  <button
+                    onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!nextChapter}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Next Chapter"
+                  >
+                    <SkipForward className="w-5 h-5" />
+                  </button>
+                </div>
+              </>
             )}
             
             {/* Right */}
@@ -1094,27 +1131,6 @@ export default function ChapterReaderPage() {
         >
           <div className="py-4 px-4 backdrop-blur-md bg-black/40">
             <div className="max-w-4xl mx-auto">
-              {/* Mobile Chapter Nav */}
-              {filteredChapters.length > 1 && (
-                <div className="flex md:hidden items-center justify-between mb-3">
-                  <button
-                    onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                    disabled={!prevChapter}
-                    className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Prev Ch.
-                  </button>
-                  <span className="text-sm text-zinc-400">Ch. {currentChapter?.chapter}</span>
-                  <button
-                    onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                    disabled={!nextChapter}
-                    className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
-                  >
-                    Next Ch. <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              
               {/* Page Slider */}
               <div className="flex items-center gap-4">
                 <button
