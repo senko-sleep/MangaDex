@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   mode: 'auto',           // auto, scroll, page, double
   direction: 'ltr',       // ltr (left-to-right), rtl (right-to-left)
   fitMode: 'contain',     // width, height, original, contain (fit to screen)
-  backgroundColor: '#000000',
+  backgroundColor: '#09090b',
   gapSize: 0,             // gap between pages in scroll mode
   preloadPages: 3,
   tapToNavigate: true,    // tap left/right side to navigate
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
   pageNumberVisibility: 'always',
 };
 
-// Background presets with creative themes
+// Background presets - simplified
 const BG_PRESETS = [
   { 
     name: 'Blur', 
@@ -43,42 +43,14 @@ const BG_PRESETS = [
     description: 'Pure black'
   },
   { 
-    name: 'Midnight', 
-    value: 'linear-gradient(180deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)', 
-    type: 'gradient',
-    preview: 'linear-gradient(180deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-    description: 'Deep night sky'
+    name: 'Theme', 
+    value: '#09090b', 
+    type: 'solid',
+    preview: '#09090b',
+    description: 'Website theme'
   },
   { 
-    name: 'Ember', 
-    value: 'linear-gradient(180deg, #1a0a0a 0%, #2d1810 50%, #1a0505 100%)', 
-    type: 'gradient',
-    preview: 'linear-gradient(180deg, #1a0a0a 0%, #2d1810 50%, #1a0505 100%)',
-    description: 'Warm ember glow'
-  },
-  { 
-    name: 'Forest', 
-    value: 'linear-gradient(180deg, #0a1a0a 0%, #0d2818 50%, #051a0a 100%)', 
-    type: 'gradient',
-    preview: 'linear-gradient(180deg, #0a1a0a 0%, #0d2818 50%, #051a0a 100%)',
-    description: 'Deep forest'
-  },
-  { 
-    name: 'Ocean', 
-    value: 'linear-gradient(180deg, #0a0a1a 0%, #0d1828 50%, #050a1a 100%)', 
-    type: 'gradient',
-    preview: 'linear-gradient(180deg, #0a0a1a 0%, #0d1828 50%, #050a1a 100%)',
-    description: 'Deep ocean'
-  },
-  { 
-    name: 'Parchment', 
-    value: 'linear-gradient(180deg, #1a1814 0%, #2a2520 50%, #1a1610 100%)', 
-    type: 'gradient',
-    preview: 'linear-gradient(180deg, #1a1814 0%, #2a2520 50%, #1a1610 100%)',
-    description: 'Old paper feel'
-  },
-  { 
-    name: 'Paper', 
+    name: 'White', 
     value: '#f5f5f4', 
     type: 'solid',
     preview: '#f5f5f4',
@@ -372,9 +344,9 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
 
 
 // Helper to get image fit styles for page modes
-const getPageImageStyle = (fitMode, isDouble = false) => {
+const getPageImageStyle = (fitMode, isDouble = false, headerVisible = false) => {
   const baseMaxWidth = isDouble ? 'calc(50vw - 2rem)' : 'calc(100vw - 4rem)';
-  const baseMaxHeight = 'calc(100vh - 9rem)';
+  const baseMaxHeight = headerVisible ? 'calc(100vh - 11rem)' : 'calc(100vh - 6rem)';
   
   switch (fitMode) {
     case 'width':
@@ -924,35 +896,37 @@ export default function ChapterReaderPage() {
             </div>
             
             {/* Center - Chapter Navigation */}
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                disabled={!prevChapter}
-                className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Previous Chapter"
-              >
-                <SkipBack className="w-5 h-5" />
-              </button>
-              
-              <select
-                value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
-                onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
-                className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
-              >
-                {filteredChapters.map(c => (
-                  <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
-                ))}
-              </select>
-              
-              <button
-                onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                disabled={!nextChapter}
-                className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Next Chapter"
-              >
-                <SkipForward className="w-5 h-5" />
-              </button>
-            </div>
+            {filteredChapters.length > 1 && (
+              <div className="hidden md:flex items-center gap-2">
+                <button
+                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                  disabled={!prevChapter}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Previous Chapter"
+                >
+                  <SkipBack className="w-5 h-5" />
+                </button>
+                
+                <select
+                  value={filteredChapters.find(c => parseFloat(c.chapter) === currentChapterNum)?.id || chapterId}
+                  onChange={(e) => navigate(`/manga/${id}/${e.target.value}`, { state: { isLongStrip, preferredLang } })}
+                  className="h-10 px-4 bg-zinc-900/80 border border-zinc-700 rounded-xl text-sm focus:outline-none focus:border-orange-500"
+                >
+                  {filteredChapters.map(c => (
+                    <option key={c.id} value={c.id}>Ch. {c.chapter}</option>
+                  ))}
+                </select>
+                
+                <button
+                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                  disabled={!nextChapter}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Next Chapter"
+                >
+                  <SkipForward className="w-5 h-5" />
+                </button>
+              </div>
+            )}
             
             {/* Right */}
             <div className="flex items-center gap-2">
@@ -1040,17 +1014,22 @@ export default function ChapterReaderPage() {
       ) : actualMode === 'double' ? (
         // Double Page Mode - Two pages side by side
         <div 
-          className="min-h-screen flex items-center justify-center pt-14 pb-24 px-12 relative z-10"
+          className={`min-h-screen flex items-center justify-center pb-24 px-12 relative z-10 ${
+            settings.headerVisibility === 'always' ? 'pt-20' : 'pt-4'
+          }`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <div className="flex items-center justify-center gap-1" style={{ maxHeight: settings.fitMode === 'original' ? 'none' : 'calc(100vh - 9rem)' }}>
+          <div className="flex items-center justify-center gap-1" style={{ 
+            maxHeight: settings.fitMode === 'original' ? 'none' : 
+              settings.headerVisibility === 'always' ? 'calc(100vh - 11rem)' : 'calc(100vh - 6rem)'
+          }}>
             {pages[currentPage] && (
               <img
                 src={pages[currentPage].url}
                 alt={`Page ${currentPage + 1}`}
-                className={getPageImageStyle(settings.fitMode, true).className}
-                style={getPageImageStyle(settings.fitMode, true).style}
+                className={getPageImageStyle(settings.fitMode, true, settings.headerVisibility === 'always').className}
+                style={getPageImageStyle(settings.fitMode, true, settings.headerVisibility === 'always').style}
                 draggable={false}
                 onError={() => handleImageError(pages[currentPage].url, currentPage)}
                 referrerPolicy="no-referrer"
@@ -1060,8 +1039,8 @@ export default function ChapterReaderPage() {
               <img
                 src={pages[currentPage + 1].url}
                 alt={`Page ${currentPage + 2}`}
-                className={getPageImageStyle(settings.fitMode, true).className}
-                style={getPageImageStyle(settings.fitMode, true).style}
+                className={getPageImageStyle(settings.fitMode, true, settings.headerVisibility === 'always').className}
+                style={getPageImageStyle(settings.fitMode, true, settings.headerVisibility === 'always').style}
                 draggable={false}
                 onError={() => handleImageError(pages[currentPage + 1].url, currentPage + 1)}
                 referrerPolicy="no-referrer"
@@ -1072,7 +1051,9 @@ export default function ChapterReaderPage() {
       ) : (
         // Single Page Mode - Clean view
         <div 
-          className="min-h-screen flex items-center justify-center pt-14 pb-24 relative z-10"
+          className={`min-h-screen flex items-center justify-center pb-24 relative z-10 ${
+            settings.headerVisibility === 'always' ? 'pt-20' : 'pt-4'
+          }`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -1080,8 +1061,8 @@ export default function ChapterReaderPage() {
             <img
               src={pages[currentPage].url}
               alt={`Page ${currentPage + 1}`}
-              className={getPageImageStyle(settings.fitMode, false).className}
-              style={getPageImageStyle(settings.fitMode, false).style}
+              className={getPageImageStyle(settings.fitMode, false, settings.headerVisibility === 'always').className}
+              style={getPageImageStyle(settings.fitMode, false, settings.headerVisibility === 'always').style}
               draggable={false}
               onError={() => handleImageError(pages[currentPage].url, currentPage)}
               referrerPolicy="no-referrer"
@@ -1114,23 +1095,25 @@ export default function ChapterReaderPage() {
           <div className="py-4 px-4 backdrop-blur-md bg-black/40">
             <div className="max-w-4xl mx-auto">
               {/* Mobile Chapter Nav */}
-              <div className="flex md:hidden items-center justify-between mb-3">
-                <button
-                  onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                  disabled={!prevChapter}
-                  className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" /> Prev Ch.
-                </button>
-                <span className="text-sm text-zinc-400">Ch. {currentChapter?.chapter}</span>
-                <button
-                  onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
-                  disabled={!nextChapter}
-                  className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
-                >
-                  Next Ch. <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+              {filteredChapters.length > 1 && (
+                <div className="flex md:hidden items-center justify-between mb-3">
+                  <button
+                    onClick={() => prevChapter && navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!prevChapter}
+                    className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Prev Ch.
+                  </button>
+                  <span className="text-sm text-zinc-400">Ch. {currentChapter?.chapter}</span>
+                  <button
+                    onClick={() => nextChapter && navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    disabled={!nextChapter}
+                    className="px-4 py-2 bg-zinc-800 rounded-lg text-sm disabled:opacity-30 flex items-center gap-1"
+                  >
+                    Next Ch. <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               
               {/* Page Slider */}
               <div className="flex items-center gap-4">
