@@ -290,7 +290,6 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
               {[
                 { key: 'headerVisibility', label: 'Header', desc: 'Top bar with chapter info' },
                 { key: 'footerVisibility', label: 'Progress Bar', desc: 'Bottom page slider' },
-                { key: 'navButtonsVisibility', label: 'Nav Buttons', desc: 'Left/right arrows' },
                 { key: 'pageNumberVisibility', label: 'Page Number', desc: 'Current page indicator' },
               ].map(({ key, label, desc }) => (
                 <div key={key} className="flex items-center justify-between">
@@ -1045,19 +1044,6 @@ export default function ChapterReaderPage() {
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Left Navigation Button */}
-          {settings.navButtonsVisibility !== 'never' && (
-            <button
-              onClick={() => goPage(-1)}
-              disabled={currentPage === 0 && !prevChapter}
-              className={`fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
-                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
-              }`}
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-          )}
-
           <div className="flex items-center justify-center gap-1" style={{ maxHeight: settings.fitMode === 'original' ? 'none' : 'calc(100vh - 9rem)' }}>
             {pages[currentPage] && (
               <img
@@ -1082,40 +1068,14 @@ export default function ChapterReaderPage() {
               />
             )}
           </div>
-
-          {/* Right Navigation Button */}
-          {settings.navButtonsVisibility !== 'never' && (
-            <button
-              onClick={() => goPage(1)}
-              disabled={currentPage >= pages.length - 1 && !nextChapter}
-              className={`fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
-                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
-              }`}
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-          )}
         </div>
       ) : (
-        // Single Page Mode - Clean view with navigation buttons
+        // Single Page Mode - Clean view
         <div 
           className="min-h-screen flex items-center justify-center pt-14 pb-24 relative z-10"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Left Navigation Button */}
-          {settings.navButtonsVisibility !== 'never' && (
-            <button
-              onClick={() => goPage(-1)}
-              disabled={currentPage === 0 && !prevChapter}
-              className={`fixed left-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
-                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
-              }`}
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-          )}
-
           {pages[currentPage] && (
             <img
               src={pages[currentPage].url}
@@ -1126,19 +1086,6 @@ export default function ChapterReaderPage() {
               onError={() => handleImageError(pages[currentPage].url, currentPage)}
               referrerPolicy="no-referrer"
             />
-          )}
-
-          {/* Right Navigation Button */}
-          {settings.navButtonsVisibility !== 'never' && (
-            <button
-              onClick={() => goPage(1)}
-              disabled={currentPage === pages.length - 1 && !nextChapter}
-              className={`fixed right-2 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/60 hover:bg-black/80 rounded-full transition-all disabled:opacity-20 disabled:cursor-not-allowed ${
-                settings.navButtonsVisibility === 'hover' && !showHeader && !showFooter ? 'opacity-0 hover:opacity-100' : ''
-              }`}
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
           )}
         </div>
       )}
