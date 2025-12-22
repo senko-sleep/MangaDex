@@ -20,9 +20,9 @@ const DEFAULT_SETTINGS = {
   tapToNavigate: true,    // tap left/right side to navigate
   autoNextChapter: true,  // auto-navigate to next chapter at end
   // UI visibility: 'always', 'hover', 'never'
-  headerVisibility: 'hover',
+  headerVisibility: 'always',
   footerVisibility: 'always',
-  navButtonsVisibility: 'hover',
+  navButtonsVisibility: 'always',
   pageNumberVisibility: 'always',
 };
 
@@ -778,8 +778,20 @@ export default function ChapterReaderPage() {
     const diffX = touchStart.x - touchEnd.x;
     const diffY = touchStart.y - touchEnd.y;
     
+    // Check if it's a tap (small movement) and tapToNavigate is enabled
+    if (settings.tapToNavigate && Math.abs(diffX) < 10 && Math.abs(diffY) < 10) {
+      const screenWidth = window.innerWidth;
+      const tapX = touchEnd.x;
+      
+      // Left third of screen = previous page, right third = next page
+      if (tapX < screenWidth * 0.33) {
+        goPage(-1);
+      } else if (tapX > screenWidth * 0.67) {
+        goPage(1);
+      }
+    }
     // Horizontal swipe (more significant than vertical)
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+    else if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
       goPage(diffX > 0 ? 1 : -1);
     }
     
