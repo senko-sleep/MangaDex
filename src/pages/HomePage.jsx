@@ -242,7 +242,17 @@ export default function HomePage() {
   const filterSourceFromNav = location.state?.filterSource;
 
   // Initialize state from saved state if restoring
-  const [manga, setManga] = useState(savedState?.manga || []);
+  const [manga, setManga] = useState(() => {
+    const savedManga = savedState?.manga || [];
+    // Apply safe filter when restoring state to prevent +18 content from appearing
+    if (savedState?.contentRating === 'safe') {
+      return savedManga.filter(m => {
+        const rating = (m.contentRating || '').toLowerCase();
+        return !m.isAdult && rating !== 'erotica' && rating !== 'pornographic';
+      });
+    }
+    return savedManga;
+  });
   const [newManga, setNewManga] = useState([]);
   const [recentlyUpdated, setRecentlyUpdated] = useState([]);
   const [sectionsLoading, setSectionsLoading] = useState(true);
@@ -338,6 +348,29 @@ export default function HomePage() {
 
   // Track if we're restoring state - don't clear sources or re-fetch while restoring
   const isRestoringState = useRef(shouldSkipFetch);
+
+  // Re-filter manga when content rating changes (for restored state)
+  useEffect(() => {
+    if (savedState && manga.length > 0) {
+      const filteredManga = manga.filter(m => {
+        if (contentRating === 'adult') {
+          // Adult mode: only show adult content
+          return m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic';
+        } else if (contentRating === 'safe') {
+          // Safe mode: filter out ALL adult content
+          const rating = (m.contentRating || '').toLowerCase();
+          return !m.isAdult && rating !== 'erotica' && rating !== 'pornographic';
+        }
+        // All content mode: show everything
+        return true;
+      });
+      
+      // Only update if the filtered result is different
+      if (filteredManga.length !== manga.length) {
+        setManga(filteredManga);
+      }
+    }
+  }, [contentRating]);
 
   // Load sources based on content rating
   // safe → SFW only, all → all sources, adult → NSFW only
@@ -907,15 +940,16 @@ export default function HomePage() {
               {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all ${showFilters || hasFilters
-                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
-                  }`}
+                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all ${
+                  showFilters || hasFilters
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
+                }`}
               >
                 <Filter className="w-4 h-4" />
                 <span className="text-sm font-medium hidden sm:inline">Filters</span>
                 {hasFilters && (
-                  <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center font-bold">
                     {selectedTags.length + excludedTags.length}
                   </span>
                 )}
