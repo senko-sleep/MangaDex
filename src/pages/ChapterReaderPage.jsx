@@ -515,7 +515,7 @@ export default function ChapterReaderPage() {
 
   useEffect(() => {
     setLoading(true);
-    setCurrentPage(0);
+    setCurrentPage(location.state?.pageNumber ? Math.max(0, location.state.pageNumber - 1) : 0);
     const mangaId = decodeURIComponent(id);
     
     // Check if this is a MangaDex manga (UUID format or starts with mangadex:)

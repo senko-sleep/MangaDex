@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Search, BookOpen, Play, ChevronDown, SortAsc, SortDesc,
-  Heart, Share2, BookMarked, Globe, Info, ArrowLeft
+  Heart, Share2, BookMarked, Globe, Info, ArrowLeft, Grid3X3, Eye
 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 import { getCoverUrl, getAnilistCoverUrl, PLACEHOLDER_COVER } from '../lib/imageUtils';
 import { LANGUAGES, getLanguageDisplay } from '../lib/languages';
+import ChapterGallery from '../components/ChapterGallery';
 
 // Save detail page scroll position before navigating to chapter
 const saveDetailScrollPosition = (mangaId) => {
@@ -28,7 +29,7 @@ const clearDetailScrollPosition = (mangaId) => {
 };
 
 // Compact Chapter Row Component
-function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }) {
+function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang, onPreview }) {
   const timeAgo = (date) => {
     if (!date) return '';
     const now = new Date();
@@ -43,22 +44,28 @@ function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }
     return then.toLocaleDateString('en', { month: 'short', year: '2-digit' });
   };
 
+  const handlePreviewClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onPreview(chapter);
+  };
+
   return (
-    <Link
-      to={`/manga/${mangaId}/${chapter.id}`}
-      state={{ isLongStrip, preferredLang }}
-      className="group flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors"
-      onClick={onNavigate}
-    >
+    <div className="group flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors">
       {/* Chapter Number */}
       <span className="w-14 text-sm font-semibold text-zinc-300 group-hover:text-orange-400 transition-colors shrink-0">
         Ch. {chapter.chapter || '?'}
       </span>
       
       {/* Title */}
-      <span className="flex-1 text-sm text-zinc-500 truncate">
+      <Link
+        to={`/manga/${mangaId}/${chapter.id}`}
+        state={{ isLongStrip, preferredLang }}
+        className="flex-1 text-sm text-zinc-500 truncate hover:text-zinc-300 transition-colors"
+        onClick={onNavigate}
+      >
         {chapter.title || ''}
-      </span>
+      </Link>
       
       {/* Meta */}
       <div className="flex items-center gap-3 text-xs text-zinc-600 shrink-0">
@@ -70,9 +77,29 @@ function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }
         )}
       </div>
       
-      {/* Hover indicator */}
-      <Play className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 group-hover:text-orange-500 transition-all shrink-0" />
-    </Link>
+      {/* Action Buttons */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+        {/* Preview Button */}
+        <button
+          onClick={handlePreviewClick}
+          className="p-1.5 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-500 hover:text-orange-400"
+          title="Preview chapter pages"
+        >
+          <Eye className="w-3.5 h-3.5" />
+        </button>
+        
+        {/* Read Button */}
+        <Link
+          to={`/manga/${mangaId}/${chapter.id}`}
+          state={{ isLongStrip, preferredLang }}
+          className="p-1.5 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-500 hover:text-orange-400"
+          title="Read chapter"
+          onClick={onNavigate}
+        >
+          <Play className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -112,10 +139,38 @@ export default function MangaDetailPage() {
   const [coverUrl, setCoverUrl] = useState(null);
   const hasRestoredScroll = useRef(false);
 
+  // Gallery state
+  const [galleryChapter, setGalleryChapter] = useState(null);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+
   // Save scroll position when navigating to a chapter
   const handleChapterNavigate = () => {
     saveDetailScrollPosition(id);
   };
+
+  // Handle chapter preview
+  const handleChapterPreview = useCallback((chapter) => {
+    setGalleryChapter(chapter);
+    setIsGalleryOpen(true);
+  }, []);
+
+  // Handle navigation to specific page from gallery
+  const handleNavigateToPage = useCallback((pageNumber) => {
+    // Navigate to chapter reader with specific page
+    navigate(`/manga/${id}/${galleryChapter.id}`, { 
+      state: { 
+        isLongStrip: manga.isLongStrip, 
+        preferredLang: langFilter,
+        pageNumber 
+      } 
+    });
+  }, [id, galleryChapter, manga.isLongStrip, langFilter, navigate]);
+
+  // Close gallery
+  const handleCloseGallery = useCallback(() => {
+    setIsGalleryOpen(false);
+    setGalleryChapter(null);
+  }, []);
 
   // Restore scroll position when returning from chapter reader
   useEffect(() => {
@@ -592,6 +647,7 @@ export default function MangaDetailPage() {
                       isLongStrip={manga.isLongStrip}
                       onNavigate={handleChapterNavigate}
                       preferredLang={langFilter}
+                      onPreview={handleChapterPreview}
                     />
                   ))}
                 </div>
