@@ -260,17 +260,17 @@ function SettingsPanel({ settings, setSettings, onClose, isLongStrip }) {
             <label className="text-sm font-medium text-zinc-400 mb-3 block">UI Visibility</label>
             <div className="space-y-3">
               {[
-                { key: 'headerVisibility', label: 'Header', desc: 'Top bar with chapter info' },
-                { key: 'footerVisibility', label: 'Progress Bar', desc: 'Bottom page slider' },
-                { key: 'pageNumberVisibility', label: 'Page Number', desc: 'Current page indicator' },
-              ].map(({ key, label, desc }) => (
+                { key: 'headerVisibility', label: 'Header', desc: 'Top bar with chapter info', options: ['always', 'hover'] },
+                { key: 'footerVisibility', label: 'Progress Bar', desc: 'Bottom page slider', options: ['always', 'hover', 'never'] },
+                { key: 'pageNumberVisibility', label: 'Page Number', desc: 'Current page indicator', options: ['always', 'hover', 'never'] },
+              ].map(({ key, label, desc, options }) => (
                 <div key={key} className="flex items-center justify-between">
                   <div>
                     <span className="text-sm font-medium text-zinc-300">{label}</span>
                     <p className="text-xs text-zinc-500">{desc}</p>
                   </div>
                   <div className="flex bg-zinc-800 rounded-lg p-0.5">
-                    {['always', 'hover', 'never'].map(opt => (
+                    {options.map(opt => (
                       <button
                         key={opt}
                         onClick={() => updateSetting(key, opt)}
@@ -460,7 +460,15 @@ export default function ChapterReaderPage() {
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('readerSettings');
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migration: if headerVisibility is 'never', update it to 'hover'
+        if (parsed.headerVisibility === 'never') {
+          parsed.headerVisibility = 'hover';
+        }
+        return { ...DEFAULT_SETTINGS, ...parsed };
+      }
+      return DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -865,8 +873,7 @@ export default function ChapterReaderPage() {
           }}
         />
       )}
-      {/* Header - Visibility based on settings */}
-      {settings.headerVisibility !== 'never' && (
+      {/* Header - Always visible (either always or on hover) */}
       <header 
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
           settings.headerVisibility === 'always' || showHeader 
@@ -999,7 +1006,6 @@ export default function ChapterReaderPage() {
           </div>
         </div>
       </header>
-      )}
 
       {/* Main Reader Area */}
       {actualMode === 'scroll' ? (
