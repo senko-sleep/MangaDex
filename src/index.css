@@ -74,12 +74,12 @@
     @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/50;
   }
   
-  /* Shimmer effect for loading */
+  /* Shimmer effect for loading - faster animation */
   .shimmer {
     @apply relative overflow-hidden;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 1s infinite;
   }
   
   @keyframes shimmer {
@@ -87,23 +87,23 @@
     100% { background-position: 200% 0; }
   }
   
-  /* Fade animations */
+  /* Fade animations - optimized for instant feel */
   .fade-in {
-    animation: fadeIn 0.5s ease-out;
+    animation: fadeIn 0.2s ease-out;
   }
   
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
   }
   
-  /* Slide animations */
+  /* Slide animations - optimized for instant feel */
   .slide-up {
-    animation: slideUp 0.4s ease-out;
+    animation: slideUp 0.2s ease-out;
   }
   
   @keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
   
@@ -192,17 +192,50 @@ html {
   scroll-behavior: smooth;
   /* Use rem-based sizing for zoom compatibility */
   font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Ensure content scales properly with browser zoom */
 body {
   min-width: 320px;
-  overflow-x: auto;
+  overflow-x: hidden;
+  /* Safe area padding for notched devices */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* Make containers responsive to zoom */
 .max-w-7xl {
   max-width: min(80rem, 100vw - 2rem);
+}
+
+/* Mobile-first responsive improvements */
+@media (max-width: 640px) {
+  /* Larger touch targets on mobile */
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent text from being too small */
+  html {
+    font-size: 16px;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .max-w-7xl {
+    max-width: min(80rem, 100vw - 3rem);
+  }
+}
+
+/* Desktop optimizations */
+@media (min-width: 1025px) {
+  .max-w-7xl {
+    max-width: min(80rem, 100vw - 4rem);
+  }
 }
 
 /* Reader-specific styles */

@@ -48,80 +48,108 @@ export async function getChapterPages(chapterId) {
     return cached.pages;
   }
   
-  try {
-    // First check if this is an external chapter
-    const chapterResponse = await fetch(`${MANGADEX_API}/chapter/${cleanChapterId}`);
-    if (!chapterResponse.ok) {
-      throw new Error(`Chapter fetch failed: ${chapterResponse.status}`);
+  // Retry logic for better reliability
+  const maxRetries = 2;
+  let lastError = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // First check if this is an external chapter
+      const chapterResponse = await fetch(`${MANGADEX_API}/chapter/${cleanChapterId}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (!chapterResponse.ok) {
+        if (chapterResponse.status === 429) {
+          // Rate limited - wait and retry
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`Chapter fetch failed: ${chapterResponse.status}`);
+      }
+      
+      const chapterData = await chapterResponse.json();
+      const chapter = chapterData?.data;
+      
+      if (chapter?.attributes?.externalUrl) {
+        // External chapter - return external URL
+        console.log('[MangaDex] External chapter:', chapter.attributes.externalUrl);
+        return [{
+          page: 1,
+          url: chapter.attributes.externalUrl,
+          isExternal: true,
+          externalUrl: chapter.attributes.externalUrl,
+        }];
+      }
+      
+      // Regular chapter - get pages from at-home server
+      const atHomeResponse = await fetch(`${MANGADEX_API}/at-home/server/${cleanChapterId}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (!atHomeResponse.ok) {
+        if (atHomeResponse.status === 429) {
+          // Rate limited - wait and retry
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`At-home server fetch failed: ${atHomeResponse.status}`);
+      }
+      
+      const atHomeData = await atHomeResponse.json();
+      
+      if (!atHomeData?.chapter) {
+        console.error('[MangaDex] No chapter data in at-home response');
+        return [];
+      }
+      
+      const baseUrl = atHomeData.baseUrl;
+      const hash = atHomeData.chapter.hash;
+      
+      // Build page URLs - proxy through backend to bypass hotlink protection
+      const highQualityPages = (atHomeData.chapter.data || []).map((file, i) => ({
+        page: i + 1,
+        url: proxyUrl(`${baseUrl}/data/${hash}/${file}`),
+        originalUrl: `${baseUrl}/data/${hash}/${file}`,
+        quality: 'high',
+        isExternal: false,
+      }));
+      
+      // Data saver (lower quality) pages as fallback
+      const dataSaverPages = (atHomeData.chapter.dataSaver || []).map((file, i) => ({
+        page: i + 1,
+        url: proxyUrl(`${baseUrl}/data-saver/${hash}/${file}`),
+        originalUrl: `${baseUrl}/data-saver/${hash}/${file}`,
+        quality: 'low',
+        isExternal: false,
+      }));
+      
+      // Combine high quality with fallback URLs
+      const pages = highQualityPages.map((page, i) => ({
+        ...page,
+        fallbackUrl: dataSaverPages[i]?.url,
+      }));
+      
+      console.log(`[MangaDex] Fetched ${pages.length} pages for chapter ${cleanChapterId}`);
+      
+      // Cache the result
+      atHomeCache.set(cleanChapterId, {
+        pages,
+        timestamp: Date.now(),
+      });
+      
+      return pages;
+    } catch (error) {
+      lastError = error;
+      console.warn(`[MangaDex] Attempt ${attempt + 1} failed:`, error.message);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      }
     }
-    
-    const chapterData = await chapterResponse.json();
-    const chapter = chapterData?.data;
-    
-    if (chapter?.attributes?.externalUrl) {
-      // External chapter - return external URL
-      console.log('[MangaDex] External chapter:', chapter.attributes.externalUrl);
-      return [{
-        page: 1,
-        url: chapter.attributes.externalUrl,
-        isExternal: true,
-        externalUrl: chapter.attributes.externalUrl,
-      }];
-    }
-    
-    // Regular chapter - get pages from at-home server
-    const atHomeResponse = await fetch(`${MANGADEX_API}/at-home/server/${cleanChapterId}`);
-    if (!atHomeResponse.ok) {
-      throw new Error(`At-home server fetch failed: ${atHomeResponse.status}`);
-    }
-    
-    const atHomeData = await atHomeResponse.json();
-    
-    if (!atHomeData?.chapter) {
-      console.error('[MangaDex] No chapter data in at-home response');
-      return [];
-    }
-    
-    const baseUrl = atHomeData.baseUrl;
-    const hash = atHomeData.chapter.hash;
-    
-    // Build page URLs - proxy through backend to bypass hotlink protection
-    const highQualityPages = (atHomeData.chapter.data || []).map((file, i) => ({
-      page: i + 1,
-      url: proxyUrl(`${baseUrl}/data/${hash}/${file}`),
-      originalUrl: `${baseUrl}/data/${hash}/${file}`,
-      quality: 'high',
-      isExternal: false,
-    }));
-    
-    // Data saver (lower quality) pages as fallback
-    const dataSaverPages = (atHomeData.chapter.dataSaver || []).map((file, i) => ({
-      page: i + 1,
-      url: proxyUrl(`${baseUrl}/data-saver/${hash}/${file}`),
-      originalUrl: `${baseUrl}/data-saver/${hash}/${file}`,
-      quality: 'low',
-      isExternal: false,
-    }));
-    
-    // Combine high quality with fallback URLs
-    const pages = highQualityPages.map((page, i) => ({
-      ...page,
-      fallbackUrl: dataSaverPages[i]?.url,
-    }));
-    
-    console.log(`[MangaDex] Fetched ${pages.length} pages for chapter ${cleanChapterId}`);
-    
-    // Cache the result
-    atHomeCache.set(cleanChapterId, {
-      pages,
-      timestamp: Date.now(),
-    });
-    
-    return pages;
-  } catch (error) {
-    console.error('[MangaDex] Error fetching chapter pages:', error.message);
-    throw error;
   }
+  
+  console.error('[MangaDex] All attempts failed:', lastError?.message);
+  throw lastError || new Error('Failed to fetch chapter pages');
 }
 
 /**

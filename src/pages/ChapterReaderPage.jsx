@@ -564,24 +564,31 @@ export default function ChapterReaderPage() {
     });
   }, [id, chapterId]);
 
-  // Preload upcoming pages when current page changes
+  // Preload upcoming pages when current page changes - aggressive preloading for smooth experience
   useEffect(() => {
     if (pages.length === 0) return;
     
-    // Preload next N pages based on settings
-    const preloadCount = settings.preloadPages || 3;
+    // Preload next N pages based on settings (minimum 5 for smooth reading)
+    const preloadCount = Math.max(settings.preloadPages || 3, 5);
+    
+    // Preload forward pages with priority
     for (let i = 1; i <= preloadCount; i++) {
       const nextIdx = currentPage + i;
       if (nextIdx < pages.length) {
         const img = new Image();
+        img.fetchPriority = i <= 2 ? 'high' : 'low';
         img.src = pages[nextIdx].url;
       }
     }
     
-    // Also preload previous page for back navigation
-    if (currentPage > 0) {
-      const img = new Image();
-      img.src = pages[currentPage - 1].url;
+    // Also preload 2 previous pages for back navigation
+    for (let i = 1; i <= 2; i++) {
+      const prevIdx = currentPage - i;
+      if (prevIdx >= 0) {
+        const img = new Image();
+        img.fetchPriority = 'low';
+        img.src = pages[prevIdx].url;
+      }
     }
   }, [currentPage, pages, settings.preloadPages]);
 
@@ -1108,12 +1115,13 @@ export default function ChapterReaderPage() {
         </div>
       )}
 
-      {/* Floating Page Number - Visibility based on settings */}
-      {actualMode !== 'scroll' && settings.pageNumberVisibility !== 'never' && (
+      {/* Floating Page Number - Only show when footer is hidden to avoid redundancy */}
+      {actualMode !== 'scroll' && settings.pageNumberVisibility !== 'never' && settings.footerVisibility !== 'always' && (
         <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-black/60 backdrop-blur-sm text-sm font-medium transition-opacity duration-200 ${
-          settings.pageNumberVisibility === 'always' || (!showFooter && settings.pageNumberVisibility === 'hover')
+          (settings.pageNumberVisibility === 'always' && !showFooter) || 
+          (settings.pageNumberVisibility === 'hover' && !showFooter)
             ? 'opacity-100' 
-            : 'opacity-0'
+            : 'opacity-0 pointer-events-none'
         }`}>
           {currentPage + 1} / {pages.length}
         </div>
@@ -1156,7 +1164,8 @@ export default function ChapterReaderPage() {
                       style={{ width: `${((currentPage + 1) / pages.length) * 100}%` }}
                     />
                   </div>
-                  <div className="flex justify-center mt-2 text-xs text-zinc-500">
+                  {/* Page number in footer - clickable to jump */}
+                  <div className="flex justify-center mt-2">
                     {showPageInput ? (
                       <form
                         onSubmit={(e) => {
@@ -1181,14 +1190,14 @@ export default function ChapterReaderPage() {
                             setShowPageInput(false);
                             setPageInputValue('');
                           }}
-                          className="w-12 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-center text-white text-xs focus:outline-none focus:border-orange-500"
+                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-center text-white text-sm focus:outline-none focus:border-orange-500"
                           autoFocus
                         />
-                        <span className="text-white">/ {pages.length}</span>
+                        <span className="text-white text-sm">/ {pages.length}</span>
                       </form>
                     ) : (
-                      <span
-                        className="text-white font-medium cursor-pointer hover:text-orange-400 transition-colors"
+                      <button
+                        className="px-3 py-1 bg-zinc-800/80 rounded-full text-white text-sm font-medium hover:bg-zinc-700 transition-colors"
                         onClick={() => {
                           setPageInputValue(String(currentPage + 1));
                           setShowPageInput(true);
@@ -1196,7 +1205,7 @@ export default function ChapterReaderPage() {
                         title="Click to jump to page"
                       >
                         {currentPage + 1} / {pages.length}
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>

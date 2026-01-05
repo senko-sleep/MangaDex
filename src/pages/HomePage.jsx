@@ -68,7 +68,7 @@ function MangaCard({ manga, index, onNavigate, onImageError }) {
       to={`/manga/${encodeURIComponent(manga.id)}`}
       state={{ sourceId }}
       className="group relative fade-in"
-      style={{ animationDelay: `${Math.min(index, 20) * 20}ms` }}
+      style={{ animationDelay: `${Math.min(index, 8) * 15}ms` }}
       onClick={() => onNavigate(manga.id)}
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
@@ -497,8 +497,16 @@ export default function HomePage() {
         data = json.data || [];
       }
 
+      // Filter based on content rating
       if (contentRating === 'adult') {
+        // Adult mode: only show adult content
         data = data.filter(m => m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic');
+      } else if (contentRating === 'safe') {
+        // Safe mode: filter out ALL adult content
+        data = data.filter(m => {
+          const rating = (m.contentRating || '').toLowerCase();
+          return !m.isAdult && rating !== 'erotica' && rating !== 'pornographic';
+        });
       }
 
       if (isAppend) {
@@ -584,8 +592,16 @@ export default function HomePage() {
         const json = await res.json();
         let data = json.data || [];
 
+        // Filter based on content rating
         if (contentRating === 'adult') {
+          // Adult mode: only show adult content
           data = data.filter(m => m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic');
+        } else if (contentRating === 'safe') {
+          // Safe mode: filter out ALL adult content
+          data = data.filter(m => {
+            const rating = (m.contentRating || '').toLowerCase();
+            return !m.isAdult && rating !== 'erotica' && rating !== 'pornographic';
+          });
         }
 
         setManga(data);
