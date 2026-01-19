@@ -321,84 +321,86 @@ export default function HomePage() {
   }, []);
 
   // Fetch homepage sections (new manga, recently updated)
+  // Track if we're restoring state - don't clear sources or re-fetch while restoring
+  const isRestoringState = useRef(shouldSkipFetch);
+
+  // Bootstrap - fetch everything in one go
   useEffect(() => {
-    const fetchSections = async () => {
-      setSectionsLoading(true);
+    const loadBootstrap = async () => {
+      // Only show section loading if we don't have data yet
+      if (newManga.length === 0) setSectionsLoading(true);
+
+      let adult = 'false';
+      let adultOnly = 'false';
+      if (contentRating === 'all') adult = 'true';
+      else if (contentRating === 'adult') { adult = 'true'; adultOnly = 'true'; }
+
       try {
-        const [newRes, latestRes] = await Promise.all([
-          fetch(apiUrl('/api/manga/new?adult=false')),
-          fetch(apiUrl('/api/manga/latest?adult=false'))
-        ]);
+        const res = await fetch(apiUrl(`/api/bootstrap?adult=${adult}&adultOnly=${adultOnly}`));
+        const data = await res.json();
 
-        const [newData, latestData] = await Promise.all([
-          newRes.json(),
-          latestRes.json()
-        ]);
+        // 1. Set Sources & Content Types
+        setSources(data.sources || []);
+        setEnabledSources(data.enabledSources || []);
+        setContentTypes(data.contentTypes || []);
 
-        setNewManga((newData.data || []).slice(0, 12));
-        setRecentlyUpdated((latestData.data || []).slice(0, 12));
+        if (!isRestoringState.current) {
+          setSelectedSources([]);
+        }
+
+        // 2. Set Sections (New & Recent)
+        const hasNew = data.newManga && data.newManga.length > 0;
+        const hasLatest = data.latest && data.latest.length > 0;
+
+        if (hasNew) setNewManga((data.newManga || []).slice(0, 12));
+        if (hasLatest) setRecentlyUpdated((data.latest || []).slice(0, 12));
+
+        // 3. Set Main Grid (Popular) - ONLY if in default view and not restoring
+        // This prevents double-fetch or overwriting search results
+        const isDefaultView = !search && selectedSources.length === 0 &&
+          statusFilter === 'all' && sortBy === 'popular' &&
+          selectedTags.length === 0 && excludedTags.length === 0;
+
+        if (isDefaultView && !isRestoringState.current) {
+          setManga(data.popular || []);
+          setHasMore((data.popular || []).length >= 20);
+          setInitialLoad(false);
+          // Prevent doFetch from running immediately after this
+          isRestoreMode.current = true; // Temporary hack to skip next doFetch
+          setTimeout(() => { isRestoreMode.current = false; }, 100);
+        }
+
+        // 4. Fallback: If sections are missing, fetch them individually
+        // This handles cold cache scenarios where bootstrap returns empty arrays
+        const promises = [];
+        if (!hasNew) {
+          promises.push(
+            fetch(apiUrl(`/api/manga/new?adult=${adult}&adultOnly=${adultOnly}`))
+              .then(r => r.json())
+              .then(d => setNewManga((d.data || []).slice(0, 12)))
+              .catch(e => console.error('Fallback new fetch error', e))
+          );
+        }
+        if (!hasLatest) {
+          promises.push(
+            fetch(apiUrl(`/api/manga/latest?adult=${adult}&adultOnly=${adultOnly}`))
+              .then(r => r.json())
+              .then(d => setRecentlyUpdated((d.data || []).slice(0, 12)))
+              .catch(e => console.error('Fallback latest fetch error', e))
+          );
+        }
+
+        if (promises.length > 0) {
+          await Promise.allSettled(promises);
+        }
+
       } catch (e) {
-        console.error('[MangaFox] Error fetching sections:', e);
+        console.error('[MangaFox] Bootstrap error:', e);
       }
       setSectionsLoading(false);
     };
 
-    fetchSections();
-  }, []);
-
-  // Track if we're restoring state - don't clear sources or re-fetch while restoring
-  const isRestoringState = useRef(shouldSkipFetch);
-
-  // Re-filter manga when content rating changes (for restored state)
-  useEffect(() => {
-    if (savedState && manga.length > 0) {
-      const filteredManga = manga.filter(m => {
-        if (contentRating === 'adult') {
-          // Adult mode: only show adult content
-          return m.isAdult || m.contentRating === 'erotica' || m.contentRating === 'pornographic';
-        } else if (contentRating === 'safe') {
-          // Safe mode: filter out ALL adult content
-          const rating = (m.contentRating || '').toLowerCase();
-          return !m.isAdult && rating !== 'erotica' && rating !== 'pornographic';
-        }
-        // All content mode: show everything
-        return true;
-      });
-      
-      // Only update if the filtered result is different
-      if (filteredManga.length !== manga.length) {
-        setManga(filteredManga);
-      }
-    }
-  }, [contentRating]);
-
-  // Load sources based on content rating
-  // safe → SFW only, all → all sources, adult → NSFW only
-  useEffect(() => {
-    let adult = 'false';
-    let adultOnly = 'false';
-
-    if (contentRating === 'safe') {
-      adult = 'false';
-      adultOnly = 'false';
-    } else if (contentRating === 'all') {
-      adult = 'true';
-      adultOnly = 'false';
-    } else if (contentRating === 'adult') {
-      adult = 'true';
-      adultOnly = 'true';
-    }
-
-    fetch(apiUrl(`/api/sources?adult=${adult}&adultOnly=${adultOnly}`)).then(r => r.json()).then(d => {
-      setSources(d.sources || []);
-      setEnabledSources(d.enabled || []);
-      setContentTypes(d.contentTypes || []);
-
-      // Only clear selected sources if NOT restoring from saved state
-      if (!isRestoringState.current) {
-        setSelectedSources([]);
-      }
-    }).catch(() => { });
+    loadBootstrap();
   }, [contentRating]);
 
   // Fetch tags when selected sources or content rating changes
@@ -713,16 +715,16 @@ export default function HomePage() {
         const element = document.getElementById(elementId);
         if (element) {
           console.log('[MangaFox] Found element, scrolling to it');
-          
+
           // Get element's position relative to viewport and calculate exact scroll position
           const rect = element.getBoundingClientRect();
           const elementCenter = rect.top + rect.height / 2;
           const viewportCenter = window.innerHeight / 2;
           const scrollTarget = window.scrollY + elementCenter - viewportCenter;
-          
+
           // Scroll to exact position to center the element
           window.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'instant' });
-          
+
           // Add highlight effect
           element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2', 'ring-offset-zinc-950', 'rounded-xl');
           setTimeout(() => {
@@ -940,19 +942,13 @@ export default function HomePage() {
               {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all ${
-                  showFilters || hasFilters
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
-                }`}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all ${showFilters || hasFilters
+                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 <span className="text-sm font-medium hidden sm:inline">Filters</span>
-                {hasFilters && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center font-bold">
-                    {selectedTags.length + excludedTags.length}
-                  </span>
-                )}
               </button>
 
               {/* Grid Size Toggle */}
@@ -1087,8 +1083,10 @@ export default function HomePage() {
                 {/* Sources (inline) and IMHentai artist filter */}
                 <div className="flex flex-wrap items-start gap-3 mb-3">
                   {/* Sources */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-semibold text-zinc-500">Source:</span>
+                  <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Source:</span>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {sources.length > 0 ? sources.map(source => (
                         <button key={source.id} onClick={() => toggleSource(source.id)}
@@ -1102,106 +1100,106 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                </div>
-
-                {/* Artist Filter (Advanced) - visible when IMHentai selected */}
-                {selectedSources.includes('imhentai') && (
-                  <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Camera className="w-3.5 h-3.5 text-pink-500" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (IMHentai)</span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full">
-                      <input
-                        type="text"
-                        value={artistFilter}
-                        onChange={e => setArtistFilter(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && artistFilter.trim()) {
-                            setSearch(artistFilter.trim());
-                            setPage(1);
-                            setShowFilters(false);
-                          }
-                        }}
-                        placeholder="Enter artist name..."
-                        className="w-full h-9 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50"
-                      />
-                      <div className="flex gap-2 w-full sm:w-auto">
-                        <button 
-                          onClick={() => { if (artistFilter.trim()) { setSearch(artistFilter.trim()); setPage(1); setShowFilters(false); } }}
-                          className="flex-1 sm:flex-none h-9 px-3 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
-                        >
-                          Apply
-                        </button>
-                        <button 
-                          onClick={() => { setArtistFilter(''); }} 
-                          className="flex-1 sm:flex-none h-9 px-3 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
-                        >
-                          Clear
-                        </button>
+                  {/* Artist Filter (Advanced) - visible when IMHentai selected */}
+                  {selectedSources.includes('imhentai') && (
+                    <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Camera className="w-3.5 h-3.5 text-pink-500" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (IMHentai)</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full">
+                        <input
+                          type="text"
+                          value={artistFilter}
+                          onChange={e => setArtistFilter(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && artistFilter.trim()) {
+                              setSearch(artistFilter.trim());
+                              setPage(1);
+                              setShowFilters(false);
+                            }
+                          }}
+                          placeholder="Enter artist name..."
+                          className="w-full h-9 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-sm placeholder-zinc-500 focus:outline-none focus:border-orange-500/50"
+                        />
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          <button
+                            onClick={() => { if (artistFilter.trim()) { setSearch(artistFilter.trim()); setPage(1); setShowFilters(false); } }}
+                            className="flex-1 sm:flex-none h-9 px-3 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
+                          >
+                            Apply
+                          </button>
+                          <button
+                            onClick={() => { setArtistFilter(''); }}
+                            className="flex-1 sm:flex-none h-9 px-3 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Tags Section - Compact collapsible */}
-                {availableFilters.tags && allTags.length > 0 && (
-                  <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50">
-                    <button onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
-                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-zinc-800/30 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <Filter className="w-3.5 h-3.5 text-orange-500" />
-                        <span className="text-xs font-medium">Tags</span>
-                        <span className="text-[11px] text-zinc-500">{tagsLoading ? 'Loading...' : `(${allTags.length})`}</span>
-                        {(selectedTags.length > 0 || excludedTags.length > 0) && (
-                          <span className="text-[11px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">{selectedTags.length + excludedTags.length} selected</span>
-                        )}
-                      </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedSection === 'tags' && (
-                      <div className="px-3 pb-3 border-t border-zinc-800/50">
-                        {needsTagSearch && (
-                          <div className="pt-2 pb-1">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                              <input type="text" value={tagSearch} onChange={(e) => setTagSearch(e.target.value)} placeholder="Search tags..."
-                                className="w-full h-7 pl-7 pr-6 bg-zinc-800 border border-zinc-700 rounded-md text-xs placeholder-zinc-500 focus:outline-none focus:border-orange-500/50" />
-                              {tagSearch && <button onClick={() => setTagSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2"><X className="w-3 h-3 text-zinc-400" /></button>}
+                  {/* Tags Section - Compact collapsible */}
+                  {availableFilters.tags && allTags.length > 0 && (
+                    <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50">
+                      <button onClick={() => setExpandedSection(expandedSection === 'tags' ? '' : 'tags')}
+                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-zinc-800/30 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Filter className="w-3.5 h-3.5 text-orange-500" />
+                          <span className="text-xs font-medium">Tags</span>
+                          <span className="text-[11px] text-zinc-500">{tagsLoading ? 'Loading...' : `(${allTags.length})`}</span>
+                          {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                            <span className="text-[11px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">{selectedTags.length + excludedTags.length} selected</span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${expandedSection === 'tags' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedSection === 'tags' && (
+                        <div className="px-3 pb-3 border-t border-zinc-800/50">
+                          {needsTagSearch && (
+                            <div className="pt-2 pb-1">
+                              <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                                <input type="text" value={tagSearch} onChange={(e) => setTagSearch(e.target.value)} placeholder="Search tags..."
+                                  className="w-full h-7 pl-7 pr-6 bg-zinc-800 border border-zinc-700 rounded-md text-xs placeholder-zinc-500 focus:outline-none focus:border-orange-500/50" />
+                                {tagSearch && <button onClick={() => setTagSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2"><X className="w-3 h-3 text-zinc-400" /></button>}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {(selectedTags.length > 0 || excludedTags.length > 0) && (
-                          <div className="flex flex-wrap gap-1 pt-2 pb-2 border-b border-zinc-800/50 mb-2">
-                            {selectedTags.map(tag => (
-                              <button key={`s-${tag}`} onClick={() => toggleTag(tag, 'include')} className="px-2 py-1 text-[11px] rounded-md bg-emerald-500 text-white flex items-center gap-1">
-                                +{tag}<X className="w-2.5 h-2.5" />
-                              </button>
-                            ))}
-                            {excludedTags.map(tag => (
-                              <button key={`e-${tag}`} onClick={() => toggleTag(tag, 'exclude')} className="px-2 py-1 text-[11px] rounded-md bg-red-500 text-white flex items-center gap-1">
-                                −{tag}<X className="w-2.5 h-2.5" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {tagsLoading ? (
-                          <div className="py-4 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-orange-500" /></div>
-                        ) : (
-                          <div className="flex flex-wrap gap-1 pt-2 max-h-40 overflow-y-auto">
-                            {(needsTagSearch ? filteredTags : allTags).map(tag => (
-                              <button key={tag} onClick={() => toggleTag(tag, 'include')} onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
-                                className={`px-2 py-1 text-[11px] rounded-md font-medium transition-all ${selectedTags.includes(tag) ? 'bg-emerald-500 text-white' : excludedTags.includes(tag) ? 'bg-red-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
-                                {tag}
-                              </button>
-                            ))}
-                            {needsTagSearch && filteredTags.length === 0 && tagSearch && <div className="py-2 text-xs text-zinc-500">No match</div>}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+                          )}
+                          {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                            <div className="flex flex-wrap gap-1 pt-2 pb-2 border-b border-zinc-800/50 mb-2">
+                              {selectedTags.map(tag => (
+                                <button key={`s-${tag}`} onClick={() => toggleTag(tag, 'include')} className="px-2 py-1 text-[11px] rounded-md bg-emerald-500 text-white flex items-center gap-1">
+                                  +{tag}<X className="w-2.5 h-2.5" />
+                                </button>
+                              ))}
+                              {excludedTags.map(tag => (
+                                <button key={`e-${tag}`} onClick={() => toggleTag(tag, 'exclude')} className="px-2 py-1 text-[11px] rounded-md bg-red-500 text-white flex items-center gap-1">
+                                  −{tag}<X className="w-2.5 h-2.5" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {tagsLoading ? (
+                            <div className="py-4 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-orange-500" /></div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1 pt-2 max-h-40 overflow-y-auto">
+                              {(needsTagSearch ? filteredTags : allTags).map(tag => (
+                                <button key={tag} onClick={() => toggleTag(tag, 'include')} onContextMenu={(e) => { e.preventDefault(); toggleTag(tag, 'exclude'); }}
+                                  className={`px-2 py-1 text-[11px] rounded-md font-medium transition-all ${selectedTags.includes(tag) ? 'bg-emerald-500 text-white' : excludedTags.includes(tag) ? 'bg-red-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                                  {tag}
+                                </button>
+                              ))}
+                              {needsTagSearch && filteredTags.length === 0 && tagSearch && <div className="py-2 text-xs text-zinc-500">No match</div>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </div>
 
                 {/* Action Bar */}
                 <div className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center justify-end gap-2">

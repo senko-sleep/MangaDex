@@ -24,12 +24,14 @@ const log = {
 const startupCache = {
   popular: { sfw: null, adult: null, adultOnly: null },
   latest: { sfw: null, adult: null, adultOnly: null },
+  new: { sfw: null, adult: null, adultOnly: null },
+  sources: { sfw: null, adult: null, adultOnly: null },
   lastRefresh: 0,
   isRefreshing: false,
-  REFRESH_INTERVAL: 5 * 60 * 1000, // Refresh every 5 minutes
+  REFRESH_INTERVAL: 3 * 60 * 1000, // Refresh every 3 minutes for fresher data
 };
 
-// Prime the cache in background
+// Prime the cache in background - optimized for fast startup
 async function primeCache() {
   if (startupCache.isRefreshing) return;
   startupCache.isRefreshing = true;
@@ -38,22 +40,39 @@ async function primeCache() {
   const start = Date.now();
 
   try {
-    // Fetch popular manga for SFW, mixed adult, and adult-only modes in parallel
-    const [sfwPopular, adultPopular, adultOnlyPopular] = await Promise.all([
+    // Fetch all content modes in parallel for ultra-fast cache warming
+    const [
+      sfwPopular, sfwLatest, sfwNew,
+      adultPopular, adultLatest,
+      adultOnlyPopular, adultOnlyLatest
+    ] = await Promise.all([
+      // SFW content
       scrapers.getPopular({ includeAdult: false, page: 1 }).catch(() => []),
+      scrapers.getLatest({ includeAdult: false, page: 1 }).catch(() => []),
+      scrapers.getNewlyAdded({ includeAdult: false, page: 1 }).catch(() => []),
+      // Mixed content (SFW + Adult)
       scrapers.getPopular({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
+      scrapers.getLatest({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
+      // Adult only
       scrapers.getPopular({ includeAdult: true, adultOnly: true, page: 1 }).catch(() => []),
+      scrapers.getLatest({ includeAdult: true, adultOnly: true, page: 1 }).catch(() => []),
     ]);
 
     startupCache.popular.sfw = sfwPopular;
     startupCache.popular.adult = adultPopular;
     startupCache.popular.adultOnly = adultOnlyPopular;
+    startupCache.latest.sfw = sfwLatest;
+    startupCache.latest.adult = adultLatest;
+    startupCache.latest.adultOnly = adultOnlyLatest;
+    startupCache.new.sfw = sfwNew;
     startupCache.lastRefresh = Date.now();
 
     log.info(`✅ Startup cache primed in ${Date.now() - start}ms`, {
-      sfw: sfwPopular.length,
-      adult: adultPopular.length,
-      adultOnly: adultOnlyPopular.length,
+      sfwPopular: sfwPopular.length,
+      sfwLatest: sfwLatest.length,
+      sfwNew: sfwNew.length,
+      adultPopular: adultPopular.length,
+      adultOnlyPopular: adultOnlyPopular.length,
     });
   } catch (e) {
     log.error('Cache prime failed', { error: e.message });
@@ -79,6 +98,28 @@ function getCachedPopular(includeAdult, adultOnly = false) {
   }
 
   return cache;
+}
+
+// Get cached latest data
+function getCachedLatest(includeAdult, adultOnly = false) {
+  let cache;
+  if (adultOnly) {
+    cache = startupCache.latest.adultOnly;
+  } else if (includeAdult) {
+    cache = startupCache.latest.adult;
+  } else {
+    cache = startupCache.latest.sfw;
+  }
+  return cache;
+}
+
+// Get cached new manga data
+function getCachedNew(includeAdult, adultOnly = false) {
+  // Only SFW new manga is cached currently
+  if (!includeAdult || adultOnly) {
+    return startupCache.new.sfw;
+  }
+  return startupCache.new.sfw;
 }
 
 // In-memory cache for proxied images
@@ -433,6 +474,59 @@ app.post('/api/report/image-fail', express.json(), (req, res) => {
   }
 });
 
+// Bootstrap endpoint - get everything needed for homepage in one go
+app.get('/api/bootstrap', async (req, res) => {
+  const startTime = Date.now();
+  const includeAdult = req.query.adult === 'true';
+  const adultOnly = req.query.adultOnly === 'true';
+
+  try {
+    // 1. Get sources and content types (fast, synchronous)
+    const allsources = scrapers.getSources(includeAdult, adultOnly);
+    const contentTypeSet = new Set();
+    allsources.forEach(s => {
+      (s.contentTypes || ['manga']).forEach(t => contentTypeSet.add(t));
+    });
+
+    const contentTypes = [
+      { id: 'manga', name: 'Manga', description: 'Japanese comics' },
+      { id: 'manhwa', name: 'Manhwa', description: 'Korean comics' },
+      { id: 'manhua', name: 'Manhua', description: 'Chinese comics' },
+      { id: 'doujinshi', name: 'Doujinshi', description: 'Fan-made/indie works' },
+      { id: 'artistcg', name: 'Artist CG', description: 'Artist illustrations/CG sets' },
+      { id: 'gamecg', name: 'Game CG', description: 'Game CG/illustrations' },
+      { id: 'western', name: 'Western', description: 'Western comics/art' },
+      { id: 'imageset', name: 'Image Set', description: 'Image collections' },
+      { id: 'cosplay', name: 'Cosplay', description: 'Cosplay photo sets' },
+      { id: 'comic', name: 'Comic', description: 'General comics' },
+      { id: 'oneshot', name: 'One-shot', description: 'Single chapter works' },
+    ].filter(t => contentTypeSet.has(t.id));
+
+    // 2. Get Cached Data (instant)
+    const popular = getCachedPopular(includeAdult, adultOnly) || [];
+    const latest = getCachedLatest(includeAdult, adultOnly) || [];
+    const newManga = getCachedNew(includeAdult, adultOnly) || [];
+
+    // 3. Background fetch if cache miss (don't block, return empty arrays if needed, let client fetch individually)
+    // Actually, for bootstrap we want speed. If cache is empty, return empty and let client lazy load.
+
+    const duration = Date.now() - startTime;
+    log.api('GET', '/api/bootstrap', 200, duration, { popular: popular.length });
+
+    res.json({
+      sources: allsources,
+      enabledSources: scrapers.getEnabledSources(includeAdult, adultOnly).map(s => s.id),
+      contentTypes,
+      popular,
+      latest,
+      newManga
+    });
+  } catch (e) {
+    log.error('Bootstrap failed', { error: e.message });
+    res.status(500).json({ error: 'Bootstrap failed' });
+  }
+});
+
 // Get available sources
 app.get('/api/sources', (req, res) => {
   const includeAdult = req.query.adult === 'true';
@@ -579,14 +673,27 @@ app.get('/api/manga/popular', async (req, res) => {
   try {
     const { sources: sourceIds, adult = 'false', page = '1', tags, exclude } = req.query;
     const isAdultOnly = adult === 'only';
-    const data = await scrapers.getPopular({
-      sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true' || isAdultOnly,
-      adultOnly: isAdultOnly,
-      page: parseInt(page, 10),
-      tags: tags ? tags.split(',') : [],
-      excludeTags: exclude ? exclude.split(',') : [],
-    });
+
+    // Try cache first for page 1
+    let data;
+    if (page === '1' && !sourceIds && !tags && !exclude) {
+      const cached = getCachedPopular(adult === 'true' || isAdultOnly, isAdultOnly);
+      if (cached && cached.length > 0) {
+        data = cached;
+        log.info('⚡ Instant Popular from cache');
+      }
+    }
+
+    if (!data) {
+      data = await scrapers.getPopular({
+        sourceIds: sourceIds ? sourceIds.split(',') : null,
+        includeAdult: adult === 'true' || isAdultOnly,
+        adultOnly: isAdultOnly,
+        page: parseInt(page, 10),
+        tags: tags ? tags.split(',') : [],
+        excludeTags: exclude ? exclude.split(',') : [],
+      });
+    }
     const duration = Date.now() - startTime;
     if (data.length === 0) {
       log.warn('Popular returned no results', { sources: sourceIds, adult, page, duration });
@@ -606,12 +713,25 @@ app.get('/api/manga/latest', async (req, res) => {
   try {
     const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
     const isAdultOnly = adult === 'only';
-    const data = await scrapers.getLatest({
-      sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true' || isAdultOnly,
-      adultOnly: isAdultOnly,
-      page: parseInt(page, 10),
-    });
+
+    // Try cache first
+    let data;
+    if (page === '1' && !sourceIds) {
+      const cached = getCachedLatest(adult === 'true' || isAdultOnly, isAdultOnly);
+      if (cached && cached.length > 0) {
+        data = cached;
+        log.info('⚡ Instant Latest from cache');
+      }
+    }
+
+    if (!data) {
+      data = await scrapers.getLatest({
+        sourceIds: sourceIds ? sourceIds.split(',') : null,
+        includeAdult: adult === 'true' || isAdultOnly,
+        adultOnly: isAdultOnly,
+        page: parseInt(page, 10),
+      });
+    }
     const duration = Date.now() - startTime;
     if (data.length === 0) {
       log.warn('Latest returned no results', { sources: sourceIds, adult, page, duration });
@@ -631,12 +751,25 @@ app.get('/api/manga/new', async (req, res) => {
   try {
     const { sources: sourceIds, adult = 'false', page = '1' } = req.query;
     const isAdultOnly = adult === 'only';
-    const data = await scrapers.getNewlyAdded({
-      sourceIds: sourceIds ? sourceIds.split(',') : null,
-      includeAdult: adult === 'true' || isAdultOnly,
-      adultOnly: isAdultOnly,
-      page: parseInt(page, 10),
-    });
+
+    // Try cache first
+    let data;
+    if (page === '1' && !sourceIds) {
+      const cached = getCachedNew(adult === 'true' || isAdultOnly, isAdultOnly);
+      if (cached && cached.length > 0) {
+        data = cached;
+        log.info('⚡ Instant New from cache');
+      }
+    }
+
+    if (!data) {
+      data = await scrapers.getNewlyAdded({
+        sourceIds: sourceIds ? sourceIds.split(',') : null,
+        includeAdult: adult === 'true' || isAdultOnly,
+        adultOnly: isAdultOnly,
+        page: parseInt(page, 10),
+      });
+    }
     const duration = Date.now() - startTime;
     if (data.length === 0) {
       log.warn('NewlyAdded returned no results', { sources: sourceIds, adult, page, duration });
