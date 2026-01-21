@@ -9,6 +9,19 @@ export class NHentaiScraper extends BaseScraper {
     // Using nhentai.xxx mirror - nhentai.net API is blocked by Cloudflare
     super('NHentai', 'https://nhentai.xxx', true);
     this.imageServer = 'https://i5.nhentaimg.com';
+    // Track seen gallery IDs to prevent duplicates across pagination
+    this.seenIds = new Set();
+    this.lastClearTime = Date.now();
+  }
+
+  // Clear seen IDs periodically to prevent memory bloat
+  clearSeenIdsIfStale() {
+    const CLEAR_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    if (Date.now() - this.lastClearTime > CLEAR_INTERVAL) {
+      this.seenIds.clear();
+      this.lastClearTime = Date.now();
+      console.log('[NHentai] Cleared seen IDs cache');
+    }
   }
 
   // Helper to create proxy URL - returns absolute URL for cross-origin access
@@ -34,8 +47,17 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  parseGalleryList(html) {
+  parseGalleryList(html, resetSeenIds = false) {
     const results = [];
+
+    // Reset seen IDs at start of new browsing session (page 1)
+    if (resetSeenIds) {
+      this.seenIds.clear();
+    }
+
+    // Check if cache needs clearing (TTL-based)
+    this.clearSeenIdsIfStale();
+
     // Match gallery_item containers for nhentai.xxx
     const galleryRegex = /<div[^>]*class="gallery_item"[^>]*>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/gi;
     const linkRegex = /<a[^>]*href="\/g\/(\d+)\/"/i;
@@ -53,6 +75,13 @@ export class NHentaiScraper extends BaseScraper {
 
       if (linkMatch) {
         const id = linkMatch[1];
+
+        // Skip if we've already seen this gallery (deduplication)
+        if (this.seenIds.has(id)) {
+          continue;
+        }
+        this.seenIds.add(id);
+
         // Prefer title attribute, then caption text
         let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
         title = this.decodeHtml(title.trim());
@@ -61,6 +90,7 @@ export class NHentaiScraper extends BaseScraper {
         results.push(this.formatGallery({ id, title, coverUrl }));
       }
     }
+    console.log(`[NHentai] Parsed ${results.length} galleries (${this.seenIds.size} total seen)`);
     return results;
   }
 
@@ -95,7 +125,7 @@ export class NHentaiScraper extends BaseScraper {
       const url = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
-      return this.parseGalleryList(html);
+      return this.parseGalleryList(html, page === 1);
     } catch (e) {
       console.error('[NHentai] Search error:', e.message);
       return [];
@@ -124,13 +154,13 @@ export class NHentaiScraper extends BaseScraper {
         const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&sort=popular&page=${page}`;
         const html = await this.fetchHtml(url);
         if (!html) return [];
-        return this.parseGalleryList(html);
+        return this.parseGalleryList(html, page === 1);
       }
 
       const url = `${this.baseUrl}/?sort=popular&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
-      return this.parseGalleryList(html);
+      return this.parseGalleryList(html, page === 1);
     } catch (e) {
       console.error('[NHentai] Popular error:', e.message);
       return [];
@@ -159,13 +189,13 @@ export class NHentaiScraper extends BaseScraper {
         const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&page=${page}`;
         const html = await this.fetchHtml(url);
         if (!html) return [];
-        return this.parseGalleryList(html);
+        return this.parseGalleryList(html, page === 1);
       }
 
       const url = page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl;
       const html = await this.fetchHtml(url);
       if (!html) return [];
-      return this.parseGalleryList(html);
+      return this.parseGalleryList(html, page === 1);
     } catch (e) {
       console.error('[NHentai] Latest error:', e.message);
       return [];

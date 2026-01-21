@@ -8,6 +8,19 @@ const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || 
 export class BatoScraper extends BaseScraper {
   constructor() {
     super('Bato', 'https://batotoo.com', false);
+    // Track seen IDs to prevent duplicates across pagination
+    this.seenIds = new Set();
+    this.lastClearTime = Date.now();
+  }
+
+  // Clear seen IDs periodically
+  clearSeenIdsIfStale() {
+    const CLEAR_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    if (Date.now() - this.lastClearTime > CLEAR_INTERVAL) {
+      this.seenIds.clear();
+      this.lastClearTime = Date.now();
+      console.log('[Bato] Cleared seen IDs cache');
+    }
   }
 
   // Return direct URL for Bato - their CDN blocks server requests
@@ -54,7 +67,7 @@ export class BatoScraper extends BaseScraper {
       const $ = await this.fetch(searchUrl);
       if (!$) return [];
 
-      let results = this.parseSearchResults($);
+      let results = this.parseSearchResults($, page === 1);
 
       if (adultOnly) {
         results = results.filter(m => m.isAdult);
@@ -85,7 +98,7 @@ export class BatoScraper extends BaseScraper {
       const $ = await this.fetch(url);
       if (!$) return [];
 
-      let results = this.parseSearchResults($);
+      let results = this.parseSearchResults($, page === 1);
 
       if (adultOnly) {
         results = results.filter(m => m.isAdult);
@@ -109,7 +122,7 @@ export class BatoScraper extends BaseScraper {
       const $ = await this.fetch(url);
       if (!$) return [];
 
-      let results = this.parseSearchResults($);
+      let results = this.parseSearchResults($, page === 1);
 
       if (adultOnly) {
         results = results.filter(m => m.isAdult);
@@ -133,7 +146,7 @@ export class BatoScraper extends BaseScraper {
       const $ = await this.fetch(url);
       if (!$) return [];
 
-      let results = this.parseSearchResults($);
+      let results = this.parseSearchResults($, page === 1);
 
       if (adultOnly) {
         results = results.filter(m => m.isAdult);
@@ -157,7 +170,7 @@ export class BatoScraper extends BaseScraper {
       const $ = await this.fetch(url);
       if (!$) return [];
 
-      let results = this.parseSearchResults($);
+      let results = this.parseSearchResults($, page === 1);
 
       if (adultOnly) {
         results = results.filter(m => m.isAdult);
@@ -172,9 +185,16 @@ export class BatoScraper extends BaseScraper {
     }
   }
 
-  parseSearchResults($) {
+  parseSearchResults($, resetSeenIds = false) {
     const results = [];
-    const seen = new Set();
+
+    // Reset seen IDs at start of new browsing session (page 1)
+    if (resetSeenIds) {
+      this.seenIds.clear();
+    }
+
+    // Check if cache needs clearing (TTL-based)
+    this.clearSeenIdsIfStale();
 
     // Bato v3 search results - each manga card contains title link and cover
     // Look for the manga title link which goes to /title/ or /series/
@@ -194,8 +214,8 @@ export class BatoScraper extends BaseScraper {
 
       const slug = match[1];
 
-      // Skip if we've already seen this manga
-      if (seen.has(slug)) return;
+      // Skip if we've already seen this manga (deduplication)
+      if (this.seenIds.has(slug)) return;
 
       // Get the card/container element - go up to find a container with an image
       let $card = $link.parent();
@@ -261,7 +281,7 @@ export class BatoScraper extends BaseScraper {
         ['smut', 'mature', 'adult', 'hentai', 'yaoi', 'yuri', 'bara', 'gore'].includes(g)
       ) || cardText.includes('smut') || cardText.includes('mature') || cardText.includes('18+');
 
-      seen.add(slug);
+      this.seenIds.add(slug);
       results.push({
         id: `bato:${slug}`,
         sourceId: 'bato',

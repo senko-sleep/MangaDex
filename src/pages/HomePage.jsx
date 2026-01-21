@@ -545,7 +545,12 @@ export default function HomePage() {
       }
 
       if (isAppend) {
-        setManga(prev => [...prev, ...data]);
+        // Deduplicate results to prevent repeats during infinite scroll
+        setManga(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newItems = data.filter(m => !existingIds.has(m.id));
+          return [...prev, ...newItems];
+        });
       } else {
         setManga(data);
         window.scrollTo({ top: 0, behavior: 'instant' });
@@ -555,8 +560,11 @@ export default function HomePage() {
       setHasMore(data.length >= 20);
       setInitialLoad(false);
 
+      // Prefetch next 2 pages for faster infinite scroll
       if (data.length >= 20) {
         prefetchNextPage(p + 1);
+        // Also prefetch page after next for even smoother scrolling
+        setTimeout(() => prefetchNextPage(p + 2), 200);
       }
     } catch (e) {
       console.error('[MangaFox] Fetch error:', e);
@@ -659,7 +667,7 @@ export default function HomePage() {
     fetchManga(newPage, scrollMode === 'infinite');
   };
 
-  // Infinite scroll observer
+  // Infinite scroll observer - trigger early for seamless loading
   useEffect(() => {
     if (scrollMode !== 'infinite' || !hasMore || loading) return;
 
@@ -669,7 +677,7 @@ export default function HomePage() {
       }
     }, {
       threshold: 0.1,
-      rootMargin: '400px'
+      rootMargin: '800px' // Load much earlier for seamless scrolling
     });
 
     if (loader.current) obs.observe(loader.current);
