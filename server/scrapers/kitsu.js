@@ -17,8 +17,18 @@ export class KitsuScraper extends BaseScraper {
 
   proxyUrl(url) {
     if (!url) return '';
+    
+    // Kitsu's CDN (media.kitsu.io) allows direct CORS access - no proxy needed
+    if (url.includes('kitsu.io') || url.includes('kitsu.app')) {
+      return url; // Direct access works
+    }
+    
+    // For other sources, use proxy if available
     const base = API_BASE || '';
-    return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
+    if (base) {
+      return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
+    }
+    return url;
   }
 
   formatManga(item) {
@@ -112,7 +122,11 @@ export class KitsuScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, sort = 'popular', adultOnly = false) {
+  async getPopular(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, sort = 'popular', adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       const offset = (page - 1) * 20;
       let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-userCount`;
@@ -139,7 +153,11 @@ export class KitsuScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, adultOnly = false) {
+  async getLatest(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       const offset = (page - 1) * 20;
       let url = `${this.baseUrl}/manga?page[limit]=20&page[offset]=${offset}&sort=-updatedAt`;

@@ -14,7 +14,7 @@ export class BaseScraper {
     this.baseUrl = baseUrl;
     this.isAdult = isAdult;
     this.client = axios.create({
-      timeout: 8000, // Fast timeout
+      timeout: 10000, // 10 second timeout for reliable fetching
       httpAgent,
       httpsAgent,
       headers: {

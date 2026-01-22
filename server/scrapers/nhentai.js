@@ -132,7 +132,11 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async getPopular(options = {}) {
+    // Support both object and positional params for backward compatibility
+    let { page = 1, includeAdult = true, tags = [], excludeTags = [], language = null } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       // Defensive: if tags is not an array (e.g., called with sort string), reset it
       if (!Array.isArray(tags)) {
@@ -167,7 +171,11 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async getLatest(options = {}) {
+    // Support both object and positional params for backward compatibility
+    let { page = 1, includeAdult = true, tags = [], excludeTags = [], language = null } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       // Defensive: if tags is not an array (e.g., called with sort string), reset it
       if (!Array.isArray(tags)) {

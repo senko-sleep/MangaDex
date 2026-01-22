@@ -82,7 +82,11 @@ export class BatoScraper extends BaseScraper {
     }
   }
 
-  async getPopular(page = 1, includeAdult = true, sort = 'popular', adultOnly = false) {
+  async getPopular(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, sort = 'popular', adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       // Map sort option to Bato's sort values
       const sortMap = {
@@ -113,7 +117,11 @@ export class BatoScraper extends BaseScraper {
     }
   }
 
-  async getLatest(page = 1, includeAdult = true, adultOnly = false) {
+  async getLatest(options = {}) {
+    // Support both object and positional params for backward compatibility
+    const { page = 1, includeAdult = true, adultOnly = false } = 
+      typeof options === 'object' ? options : { page: options };
+    
     try {
       // Bato browse page with sorting by latest update
       const url = `${this.baseUrl}/v3x-search?langs=en&sort=update&page=${page}`;

@@ -1400,12 +1400,21 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Initial Loading State */}
+          {/* Initial Loading State - Enhanced with feedback */}
           {initialLoad && (
-            <div className={`grid ${gridCols[gridSize]}`}>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <MangaSkeleton key={i} />
-              ))}
+            <div className="space-y-6">
+              {/* Loading indicator with message */}
+              <div className="flex items-center justify-center gap-3 py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                <span className="text-zinc-400 text-sm">
+                  {sectionsLoading ? 'Connecting to sources...' : 'Loading manga...'}
+                </span>
+              </div>
+              <div className={`grid ${gridCols[gridSize]}`}>
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <MangaSkeleton key={i} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -1425,15 +1434,33 @@ export default function HomePage() {
                 <Search className="w-8 h-8 text-zinc-700" />
               </div>
               <p className="text-zinc-400 text-lg mb-2">No manga found</p>
-              <p className="text-zinc-600 text-sm mb-4">Try adjusting your search or filters</p>
-              {hasFilters && (
+              <p className="text-zinc-600 text-sm mb-4">
+                {search || hasFilters 
+                  ? 'Try adjusting your search or filters'
+                  : 'Some sources may be slow or unavailable'}
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                {hasFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Clear filters
+                  </button>
+                )}
                 <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-sm font-medium transition-colors"
+                  onClick={() => {
+                    setManga([]);
+                    setPage(1);
+                    setLoading(false);
+                    setTimeout(() => fetchManga(1, false), 50);
+                  }}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                 >
-                  Clear filters
+                  <RefreshCw className="w-4 h-4" />
+                  Retry
                 </button>
-              )}
+              </div>
             </div>
           )}
 

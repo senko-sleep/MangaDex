@@ -9,8 +9,10 @@ import { BatoScraper } from './bato.js';
 // Fast cache - 5 min for results, check every 60s for cleanup
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
-// Request timeout - fail fast
+// Request timeout - balanced for reliability vs UX
+// Allows slower sources to complete while not blocking too long
 const REQUEST_TIMEOUT = 8000;
+const FAST_TIMEOUT = 5000; // For initial page load
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
@@ -21,8 +23,11 @@ const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 };
 
-// Get appropriate timeout for source
-const getTimeoutForSource = (sourceId) => {
+// Get appropriate timeout for source - some sources are known to be slower
+const getTimeoutForSource = (sourceId, isFastMode = false) => {
+  if (isFastMode) return FAST_TIMEOUT;
+  // E-Hentai can be slower due to rate limiting
+  if (sourceId === 'ehentai') return 6000;
   return REQUEST_TIMEOUT;
 };
 
@@ -404,12 +409,19 @@ export async function getNewlyAdded(options = {}) {
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      if (!scraper) return [];
       try {
-        const scraper = scrapers[sourceId];
-        const data = await scraper.getNewlyAdded(page, includeAdult || adultOnly, adultOnly);
-        return data.map(m => ({ ...m, sourceId }));
+        const data = await withTimeout(
+          scraper.getNewlyAdded(page, includeAdult || adultOnly, adultOnly),
+          getTimeoutForSource(sourceId)
+        );
+        return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
-        console.error(`[${sourceId}] NewlyAdded error:`, e.message);
+        // Silent fail for timeouts, log other errors
+        if (e.message !== 'Timeout') {
+          console.error(`[${sourceId}] NewlyAdded error:`, e.message);
+        }
         return [];
       }
     })
@@ -437,12 +449,19 @@ export async function getTopRated(options = {}) {
 
   const results = await Promise.allSettled(
     targetSources.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      if (!scraper) return [];
       try {
-        const scraper = scrapers[sourceId];
-        const data = await scraper.getTopRated(page, includeAdult || adultOnly, adultOnly);
-        return data.map(m => ({ ...m, sourceId }));
+        const data = await withTimeout(
+          scraper.getTopRated(page, includeAdult || adultOnly, adultOnly),
+          getTimeoutForSource(sourceId)
+        );
+        return (data || []).map(m => ({ ...m, sourceId }));
       } catch (e) {
-        console.error(`[${sourceId}] TopRated error:`, e.message);
+        // Silent fail for timeouts
+        if (e.message !== 'Timeout') {
+          console.error(`[${sourceId}] TopRated error:`, e.message);
+        }
         return [];
       }
     })
@@ -527,22 +546,28 @@ export async function getTagsForSources(sourceIds = null, includeAdult = false) 
   const tagsBySource = {};
   const allTagsSet = new Set();
 
-  for (const sourceId of targetSourceIds) {
-    const scraper = scrapers[sourceId];
-    const source = sources[sourceId];
-
-    if (!scraper || !source) continue;
-    if (!includeAdult && source.isAdult) continue;
-
-    try {
-      const tags = await scraper.getTags();
-      if (Array.isArray(tags)) {
-        tagsBySource[sourceId] = tags.sort();
-        tags.forEach(t => allTagsSet.add(t));
+  // Fetch tags in parallel with timeouts
+  const tagResults = await Promise.allSettled(
+    targetSourceIds.map(async (sourceId) => {
+      const scraper = scrapers[sourceId];
+      const source = sources[sourceId];
+      if (!scraper || !source) return { sourceId, tags: [] };
+      if (!includeAdult && source.isAdult) return { sourceId, tags: [] };
+      
+      try {
+        const tags = await withTimeout(scraper.getTags(), 3000); // Fast timeout for tags
+        return { sourceId, tags: Array.isArray(tags) ? tags : [] };
+      } catch (e) {
+        return { sourceId, tags: [] };
       }
-    } catch (e) {
-      console.error(`[${sourceId}] Tags error:`, e.message);
-      tagsBySource[sourceId] = [];
+    })
+  );
+
+  for (const result of tagResults) {
+    if (result.status === 'fulfilled' && result.value.tags.length > 0) {
+      const { sourceId, tags } = result.value;
+      tagsBySource[sourceId] = tags.sort();
+      tags.forEach(t => allTagsSet.add(t));
     }
   }
 
