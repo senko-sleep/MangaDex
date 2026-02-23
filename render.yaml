@@ -10,4 +10,4 @@ services:
       - key: PORT
         value: 3002
       - key: API_BASE_URL
-        value: https://mangadex-i6sv.onrender.com
+        value: https://mangadex-wsuc.onrender.com

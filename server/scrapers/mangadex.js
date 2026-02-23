@@ -1,7 +1,7 @@
 import BaseScraper from './base.js';
 
 // API base URL for proxy (set via environment variable in production)
-// Must be set to the full URL of the API server (e.g., https://mangadex-i6sv.onrender.com)
+// Must be set to the full URL of the API server
 const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
 
 // MangaDex - Official API, very reliable
