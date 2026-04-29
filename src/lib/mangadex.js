@@ -2,7 +2,7 @@
 const MANGADEX_API = 'https://api.mangadex.org';
 
 // Proxy base URL - routes images through backend to bypass hotlink protection
-const PROXY_BASE = import.meta.env.VITE_API_URL || 'https://mangadex-wsuc.onrender.com';
+const PROXY_BASE = import.meta.env.VITE_API_URL || 'https://mangadex-c7bo.onrender.com';
 
 // Helper to create proxied image URL
 function proxyUrl(url) {

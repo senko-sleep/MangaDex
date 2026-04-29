@@ -893,13 +893,4 @@ app.get('/api/og/:mangaId(*)', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  log.info(`API server started`, { port: PORT, url: `http://localhost:${PORT}` });
-  log.info('Available sources:', Object.keys(scrapers.sources || {}).join(', '));
-
-  // Prime cache immediately on startup for instant first load
-  primeCache();
-
-  // Periodically refresh cache to keep it warm
-  setInterval(primeCache, startupCache.REFRESH_INTERVAL);
-});
+export default app;
