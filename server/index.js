@@ -893,4 +893,16 @@ app.get('/api/og/:mangaId(*)', async (req, res) => {
   }
 });
 
+// Start server if not running on Vercel (which handles the listen call itself)
+// This allows the server to run on a VPS or local machine even in production mode
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    log.info(`🚀 Server running at http://localhost:${PORT}`);
+    primeCache();
+  });
+} else if (process.env.VERCEL) {
+  // On Vercel, we still want to prime the cache in background
+  primeCache();
+}
+
 export default app;

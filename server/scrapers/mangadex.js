@@ -12,23 +12,17 @@ export class MangaDexScraper extends BaseScraper {
     this.tagCacheTime = 0;
   }
 
-  // Helper to create image URL - MangaDex allows direct access, only use proxy if needed
+  // Helper to create image URL - always use proxy to bypass hotlink protection and CORS issues
   proxyUrl(url) {
     if (!url) return '';
     
-    // MangaDex CDN allows direct CORS access - no proxy needed for covers and pages
-    // This avoids the Render cold start issue and speeds up image loading significantly
-    if (url.includes('uploads.mangadex.org') || url.includes('mangadex.org')) {
-      return url; // Direct access works
-    }
-    
-    // For other sources, use proxy if available
+    // Always use proxy if API_BASE is set (for Vercel/Render deployments)
     const base = API_BASE || '';
     if (base) {
       return `${base}/api/proxy/image?url=${encodeURIComponent(url)}`;
     }
     
-    // Fallback to direct URL
+    // Fallback to direct URL (only for local development without proxy)
     return url;
   }
 
