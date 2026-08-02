@@ -1,22 +1,39 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import http from 'http';
-import https from 'https';
 
-// Shared connection agents for keep-alive (faster repeated requests)
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+// Cloudflare bypass using Playwright - lazily imported to avoid overhead
+let playwrightModule = null;
+let browser = null;
+let cfCookies = null;
+let cfCookiesExpiry = 0;
 
-// Base scraper class - optimized for speed
+async function getPlaywright() {
+  if (!playwrightModule) {
+    playwrightModule = await import('playwright');
+  }
+  return playwrightModule;
+}
+
+function isCloudflareChallenge(html) {
+  if (!html || typeof html !== 'string') return false;
+  return html.includes('Just a moment') ||
+         html.includes('cf-browser-verification') ||
+         html.includes('Cloudflare') ||
+         html.includes('_cf_chl') ||
+         html.includes('challenges.cloudflare.com');
+}
+
+// Base scraper class - optimized for speed with Cloudflare bypass
 export class BaseScraper {
   constructor(name, baseUrl, isAdult = false) {
     this.name = name;
     this.baseUrl = baseUrl;
     this.isAdult = isAdult;
+    this.lastRequest = 0;
+    this.rateLimit = 200;
+    // Keep axios client for scrapers that use it directly for JSON/API calls
     this.client = axios.create({
-      timeout: 10000, // 10 second timeout for reliable fetching
-      httpAgent,
-      httpsAgent,
+      timeout: 10000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -24,28 +41,324 @@ export class BaseScraper {
         'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
       },
-      decompress: true,
-      maxRedirects: 3,
     });
   }
 
-  async fetch(url) {
+  async waitForRateLimit() {
+    const now = Date.now();
+    const elapsed = now - this.lastRequest;
+    if (elapsed < this.rateLimit) {
+      await new Promise(resolve => setTimeout(resolve, this.rateLimit - elapsed));
+    }
+    this.lastRequest = Date.now();
+  }
+
+  // Detect if a response indicates a Cloudflare challenge
+  isCloudflare(html) {
+    return isCloudflareChallenge(html);
+  }
+
+  // Fetch HTML using Playwright to bypass Cloudflare
+  async fetchWithPlaywright(url) {
+    const pw = await getPlaywright();
+    let ctx = null;
+
     try {
-      const res = await this.client.get(url);
-      return cheerio.load(res.data);
+      if (!browser || !browser.isConnected()) {
+        browser = await pw.chromium.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationDetected',
+            '--disable-dev-shm-usage',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-site-isolation-trials',
+            '--disable-features=BlockInsecurePrivateNetworkRequests',
+          ],
+        });
+      }
+
+      const contextOptions = {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        viewport: { width: 1920, height: 1080 },
+        javaScriptEnabled: true,
+        locale: 'en-US',
+        timezoneId: 'America/New_York',
+        deviceScaleFactor: 1,
+        isMobile: false,
+        hasTouch: false,
+        permissions: ['geolocation'],
+        geolocation: { latitude: 40.7128, longitude: -74.0060 }, // NYC
+      };
+
+      // Try using cached Cloudflare cookies
+      if (cfCookies && Date.now() < cfCookiesExpiry) {
+        contextOptions.storageState = { cookies: cfCookies, origins: [] };
+      }
+
+      ctx = await browser.newContext(contextOptions);
+
+      // Enhanced anti-detection
+      await ctx.addInitScript(() => {
+        // Hide webdriver property
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        
+        // Mock chrome object
+        window.chrome = {
+          runtime: {},
+          loadTimes: function() {},
+          csi: function() {},
+          app: {}
+        };
+        
+        // Mock plugins
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+        
+        // Mock languages
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        
+        // Mock permissions
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+        
+        // Mock screen
+        Object.defineProperty(screen, 'availHeight', { get: () => 1080 });
+        Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+        
+        // Mock connection
+        Object.defineProperty(navigator, 'connection', {
+          get: () => ({
+            effectiveType: '4g',
+            rtt: 100,
+            downlink: 10,
+            saveData: false
+          })
+        });
+      });
+
+      const page = await ctx.newPage();
+      
+      // Set extra headers to look more like a real browser
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Ch-Ua-Platform-Version': '"15.0.0"',
+        'Cache-Control': 'max-age=0',
+      });
+
+      // Navigate with wait for network idle to ensure Cloudflare challenge completes
+      await page.goto(url, {
+        waitUntil: 'networkidle',
+        timeout: 45000,
+      });
+
+      // Wait for Cloudflare JS challenge to solve
+      await new Promise(r => setTimeout(r, 3000));
+
+      let html = await page.content();
+
+      // Check if we're still on Cloudflare challenge page
+      if (isCloudflareChallenge(html)) {
+        console.log(`[${this.name}] Cloudflare still blocking after initial wait, extending wait...`);
+        await new Promise(r => setTimeout(r, 15000));
+        html = await page.content();
+      }
+
+      // Final check
+      if (isCloudflareChallenge(html)) {
+        console.error(`[${this.name}] Playwright still blocked by Cloudflare for ${url}`);
+        throw new Error('Cloudflare challenge not solved');
+      }
+
+      // Cache cookies for future requests
+      const cookies = await ctx.cookies();
+      if (cookies.length > 0) {
+        cfCookies = cookies;
+        cfCookiesExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
+        console.log(`[${this.name}] Cached ${cookies.length} Cloudflare bypass cookies`);
+      }
+
+      return html;
     } catch (e) {
-      // Silent fail for speed
+      throw e;
+    } finally {
+      if (ctx) await ctx.close();
+    }
+  }
+
+  // Core HTTP fetch using native fetch - returns HTML text
+  async fetchHtml(url, options = {}) {
+    await this.waitForRateLimit();
+
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      ...(options.headers || {}),
+    };
+
+    try {
+      const response = await fetch(url, { ...options, headers });
+
+      if (!response.ok) {
+        // On 403, check for Cloudflare challenge
+        let body = await response.text().catch(() => '');
+        if (response.status === 403 && isCloudflareChallenge(body)) {
+          // Skip Playwright for Hentaiera (too slow and unreliable)
+          if (this.name === 'Hentaiera') {
+            console.warn(`[${this.name}] Cloudflare detected, skipping Playwright (too slow) for: ${url}`);
+            throw new Error(`HTTP ${response.status}: Cloudflare challenge - use client-side fetching`);
+          }
+          console.warn(`[${this.name}] Cloudflare detected, falling back to Playwright for: ${url}`);
+          body = await this.fetchWithPlaywright(url);
+          if (isCloudflareChallenge(body)) {
+            throw new Error(`HTTP ${response.status}: Cloudflare challenge`);
+          }
+          return body;
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const body = await response.text();
+
+      // Check for Cloudflare challenge even on 200 responses
+      if (isCloudflareChallenge(body)) {
+        // Skip Playwright for Hentaiera (too slow and unreliable)
+        if (this.name === 'Hentaiera') {
+          console.warn(`[${this.name}] Cloudflare challenge detected, skipping Playwright (too slow) for: ${url}`);
+          throw new Error('Cloudflare challenge - use client-side fetching');
+        }
+        console.warn(`[${this.name}] Cloudflare challenge detected on ${response.status} response, falling back to Playwright for: ${url}`);
+        const pwBody = await this.fetchWithPlaywright(url);
+        if (isCloudflareChallenge(pwBody)) {
+          throw new Error('Cloudflare challenge not solved by Playwright');
+        }
+        return pwBody;
+      }
+
+      return body;
+    } catch (error) {
+      if (isCloudflareChallenge(error.message)) {
+        throw error;
+      }
+      // Network error or other - try Playwright as last resort (but not for Hentaiera)
+      if (this.name === 'Hentaiera') {
+        console.warn(`[${this.name}] Fetch failed (${error.message}), skipping Playwright for Hentaiera`);
+        throw error;
+      }
+      console.warn(`[${this.name}] Fetch failed (${error.message}), trying Playwright: ${url}`);
+      try {
+        const body = await this.fetchWithPlaywright(url);
+        if (isCloudflareChallenge(body)) {
+          throw new Error('Cloudflare challenge not solved');
+        }
+        return body;
+      } catch (pwError) {
+        console.error(`[${this.name}] Playwright fallback also failed: ${pwError.message}`);
+        throw error;
+      }
+    }
+  }
+
+  // Legacy fetch method - returns cheerio $ function for backward compatibility
+  async fetch(url, options = {}) {
+    try {
+      const html = await this.fetchHtml(url, options);
+      return cheerio.load(html);
+    } catch (e) {
+      console.error(`[${this.name}] Fetch failed: ${url}`, { error: e.message });
       return null;
     }
   }
 
-  async fetchJson(url) {
+  // HTTP HEAD request - returns status code
+  async head(url, options = {}) {
+    await this.waitForRateLimit();
+
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Referer': this.baseUrl + '/',
+      ...(options.headers || {}),
+    };
+
     try {
-      const res = await this.client.get(url);
-      return res.data;
+      const response = await fetch(url, { method: 'HEAD', headers });
+      return { status: response.status };
+    } catch (error) {
+      // Try Playwright as fallback for HEAD (Cloudflare may block HEAD requests)
+      console.warn(`[${this.name}] HEAD failed (${error.message}), trying Playwright: ${url}`);
+      try {
+        await this.fetchWithPlaywright(url);
+        return { status: 200 };
+      } catch {
+        throw error;
+      }
+    }
+  }
+
+  // Fetch JSON
+  async fetchJson(url) {
+    await this.waitForRateLimit();
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json,*/*',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
     } catch (e) {
-      // Silent fail for speed
+      console.error(`[${this.name}] fetchJson failed: ${url}`, { error: e.message });
       return null;
+    }
+  }
+
+  // Check connectivity
+  async checkConnectivity() {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(this.baseUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      return response.ok && !isCloudflareChallenge(await response.text());
+    } catch {
+      return false;
     }
   }
 

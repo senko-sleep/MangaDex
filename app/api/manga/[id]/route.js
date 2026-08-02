@@ -13,7 +13,8 @@ export async function GET(request, { params }) {
   
   try {
     const { id } = params;
-    if (!id) {
+    const mangaId = decodeURIComponent(id);
+    if (!mangaId) {
       return NextResponse.json(
         { error: 'Manga ID is required' },
         { status: 400 }
@@ -24,17 +25,17 @@ export async function GET(request, { params }) {
     let fromCache = false;
 
     // Check local database first
-    const localManga = db.getManga(id);
+    const localManga = db.getManga(mangaId);
     if (localManga) {
       manga = localManga;
       fromCache = true;
-      db.incrementViews(id);
+      db.incrementViews(mangaId);
     }
 
     // If not found locally, fetch from sources
     if (!manga) {
       try {
-        manga = await sources.getMangaDetails(id);
+        manga = await sources.getMangaDetails(mangaId);
         
         // Save to local database
         if (manga) {

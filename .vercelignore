@@ -1,0 +1,17 @@
+# Ignore Firebase functions as they are not for Vercel
+functions/
+.firebase/
+.firebaserc
+firebase.json
+
+# Ignore local dev logs
+logs/
+results.txt
+
+# Ignore Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Node modules
+node_modules/

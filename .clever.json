@@ -1,0 +1,12 @@
+{
+  "apps": [
+    {
+      "app_id": "app_8e4b0769-1a82-4de9-8792-8fa91a411f6d",
+      "org_id": "user_730e6131-9038-4a5a-a435-6f2d2177e1e7",
+      "deploy_url": "https://push-n3-par-clevercloud-customers.services.clever-cloud.com/app_8e4b0769-1a82-4de9-8792-8fa91a411f6d.git",
+      "git_ssh_url": "git+ssh://git@push-n3-par-clevercloud-customers.services.clever-cloud.com/app_8e4b0769-1a82-4de9-8792-8fa91a411f6d.git",
+      "name": "mangadex-api",
+      "alias": "mangadex-api"
+    }
+  ]
+}

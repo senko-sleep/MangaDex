@@ -101,6 +101,12 @@ export async function GET(request: NextRequest) {
     let allResults: any[] = [];
     const sourceResults: Record<string, any[]> = {};
 
+    const normalizeSourceResults = (result: any): any[] => {
+      if (Array.isArray(result)) return result;
+      if (result?.results && Array.isArray(result.results)) return result.results;
+      return [];
+    };
+
     // Search each target source in parallel
     const searchPromises = targetSources.map(async (sourceName) => {
       const source = allSources[sourceName];
@@ -129,24 +135,24 @@ export async function GET(request: NextRequest) {
             try {
               const pageNum = page || 1;
               const artistResults = await source.fetchArtistGalleries(query.toLowerCase(), pageNum);
-              results = artistResults || [];
+              results = normalizeSourceResults(artistResults);
             } catch (e) {
               results = [];
             }
           } else {
             // Search with query
-            results = await source.search(query, searchOptions);
+            results = normalizeSourceResults(await source.search(query, searchOptions));
           }
         } else if (sort === 'latest') {
           // Latest/newest first
-          results = await (source.getLatest?.(searchOptions) || source.search?.('', searchOptions) || []);
+          results = normalizeSourceResults(await (source.getLatest?.(searchOptions) || source.search?.('', searchOptions) || []));
         } else {
           // Default to popular
-          results = await (source.getPopular?.(searchOptions) || source.search?.('', searchOptions) || []);
+          results = normalizeSourceResults(await (source.getPopular?.(searchOptions) || source.search?.('', searchOptions) || []));
         }
 
         // Add source ID to each result
-        results = (results || []).map(r => ({
+        results = results.map(r => ({
           ...r,
           sourceId: sourceName,
           isAdult: ADULT_SOURCES.includes(sourceName)

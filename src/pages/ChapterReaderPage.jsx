@@ -523,6 +523,104 @@ export default function ChapterReaderPage() {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mangaId) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
     
+    // Check if this is Hentaiera (which has Cloudflare protection)
+    const isHentaiera = mangaId.startsWith('hentaiera:');
+    
+    // Hentaiera CDN serves MIXED extensions: some pages are .webp, others are .jpg.
+    // Routing through the backend proxy (/api/proxy/image) is essential because it
+    // has extension fallback (.webp -> .jpg -> .png -> .gif) that resolves the
+    // correct extension for every page. Direct CDN URLs 404 on the wrong extension.
+    const toProxyUrl = (url) => {
+      if (!url) return url;
+      if (url.includes('hentaiera.com') || url.includes('hentaiera.')) {
+        return apiUrl(`/api/proxy/image?url=${encodeURIComponent(url)}`);
+      }
+      return url;
+    };
+
+    // Function to fetch Hentaiera pages directly from browser (bypasses Cloudflare)
+    // NOTE: hentaiera.com returns Access-Control-Allow-Origin: null, so direct
+    // browser fetches are blocked by CORS. This is a LAST-RESORT fallback only.
+    // The primary path for Hentaiera is the backend /api/pages endpoint which
+    // works reliably (server-side fetch + webp URL generation).
+    const fetchHentaieraClientSide = async () => {
+      console.log('[Reader] Using client-side fetch fallback for Hentaiera:', mangaId);
+      try {
+        const gid = mangaId.replace('hentaiera:', '');
+        const url = `https://hentaiera.com/gallery/${gid}/`;
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': navigator.userAgent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://hentaiera.com/'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const html = await response.text();
+        
+        // Parse page info from hidden inputs (order-independent attribute matching)
+        const getInputValue = (html, inputId) => {
+          const tagMatch = html.match(new RegExp(`<input[^>]*\\bid=['"]${inputId}['"][^>]*>`, 'i'));
+          if (!tagMatch) return null;
+          const valMatch = tagMatch[0].match(/value=['"]([^'"]*)['"]/i);
+          return valMatch ? valMatch[1] : null;
+        };
+        
+        const server = getInputValue(html, 'load_server');
+        const dir = getInputValue(html, 'load_dir');
+        const loadId = getInputValue(html, 'load_id');
+        const totalPages = parseInt(getInputValue(html, 'load_pages') || '') || 0;
+        
+        console.log('[Reader] Hentaiera client-side parse:', { server, dir, loadId, totalPages });
+        
+        const pages = [];
+        
+        if (server && dir && loadId && totalPages > 0) {
+          // Build page URLs - use .webp extension (CDN serves mixed .webp/.jpg)
+          // Route through proxy so extension fallback resolves the correct format
+          for (let i = 1; i <= totalPages; i++) {
+            const fullUrl = `https://m${server}.hentaiera.com/${dir}/${loadId}/${i}.webp`;
+            pages.push({
+              page: i,
+              url: toProxyUrl(fullUrl),
+              originalUrl: fullUrl
+            });
+          }
+        }
+        
+        // Fallback to thumbnail parsing
+        if (pages.length === 0) {
+          const thumbRegex = /class=['"][^'"]*gthumb[^'"]*['"][^>]*>[\s\S]*?<img[^>]*data-src=['"]([^'"]*)['"]/gi;
+          let match;
+          let pageNum = 1;
+          
+          while ((match = thumbRegex.exec(html)) !== null) {
+            const thumbUrl = match[1];
+            // Convert thumbnail 1t.jpg -> 1.webp
+            const fullUrl = thumbUrl.replace(/(\d+)t\./, '$1.').replace(/\.(jpg|jpeg|png|gif)$/i, '.webp');
+            
+            pages.push({
+              page: pageNum++,
+              url: toProxyUrl(fullUrl),
+              originalUrl: fullUrl
+            });
+          }
+        }
+        
+        console.log('[Reader] Hentaiera client-side found', pages.length, 'pages');
+        return pages;
+      } catch (error) {
+        console.error('[Reader] Hentaiera client-side fetch failed:', error);
+        throw error;
+      }
+    };
+    
     // Function to fetch pages from backend API
     const fetchFromBackend = () => {
       console.log('[Reader] Fetching pages from backend for:', mangaId, chapterId);
@@ -530,28 +628,36 @@ export default function ChapterReaderPage() {
         .then(r => r.json())
         .then(data => {
           console.log('[Reader] Backend returned:', data.pages?.length || 0, 'pages');
-          // Transform relative proxy URLs to use full backend URL
-          // This is needed because on Firebase hosting, /api/proxy/image won't work
-          const pages = (data.pages || []).map(page => ({
-            ...page,
-            url: page.url?.startsWith('/api/') ? apiUrl(page.url) : page.url
-          }));
+          // Transform relative proxy URLs to use full backend URL.
+          // For Hentaiera, route through the image proxy so extension fallback works.
+          const pages = (data.pages || []).map(page => {
+            let url = page.url;
+            if (url?.startsWith('/api/')) url = apiUrl(url);
+            else if (isHentaiera) url = toProxyUrl(url);
+            return { ...page, url };
+          });
           return pages;
         });
     };
     
-    // Fetch pages - try MangaDex directly for MangaDex content, otherwise use backend
-    const pagesPromise = isMangaDex 
-      ? getMangaDexPages(chapterId).catch(err => {
-          console.error('[Reader] MangaDex pages error:', err);
-          return fetchFromBackend();
+    // For Hentaiera, prefer backend (works reliably, returns .webp URLs).
+    // Fall back to client-side only if backend fails (e.g. CORS edge cases).
+    const pagesPromise = isHentaiera 
+      ? fetchFromBackend().catch(err => {
+          console.error('[Reader] Backend pages failed for Hentaiera, falling back to client-side:', err);
+          return fetchHentaieraClientSide();
         })
-      : fetchFromBackend();
+      : (isMangaDex 
+          ? getMangaDexPages(chapterId).catch(err => {
+              console.error('[Reader] MangaDex pages error:', err);
+              return fetchFromBackend();
+            })
+          : fetchFromBackend());
     
     // Fetch pages and chapters
     Promise.all([
       pagesPromise,
-      fetch(apiUrl(`/api/chapters/${mangaId}`)).then(r => r.json())
+      fetch(apiUrl(`/api/manga/${mangaId}/chapters`)).then(r => r.json())
     ]).then(([pageData, c]) => {
       // Handle both array format and {pages: []} format
       const pages = Array.isArray(pageData) ? pageData : (pageData?.pages || []);
@@ -1034,7 +1140,7 @@ export default function ChapterReaderPage() {
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 {prevChapter && (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${prevChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    onClick={() => navigate(`/manga/${encodeURIComponent(id)}/${encodeURIComponent(prevChapter.id)}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center gap-2 transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -1043,7 +1149,7 @@ export default function ChapterReaderPage() {
                 )}
                 {nextChapter ? (
                   <button
-                    onClick={() => navigate(`/manga/${id}/${nextChapter.id}`, { state: { isLongStrip, preferredLang } })}
+                    onClick={() => navigate(`/manga/${encodeURIComponent(id)}/${encodeURIComponent(nextChapter.id)}`, { state: { isLongStrip, preferredLang } })}
                     className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl flex items-center justify-center gap-2 font-semibold transition-colors shadow-lg shadow-orange-500/25"
                   >
                     Next Chapter
@@ -1051,7 +1157,7 @@ export default function ChapterReaderPage() {
                   </button>
                 ) : (
                   <Link
-                    to={`/manga/${id}`}
+                    to={`/manga/${encodeURIComponent(id)}`}
                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center gap-2 transition-colors"
                   >
                     Back to Manga

@@ -13,7 +13,7 @@ import KitsuSource from './kitsu';
 import NHentaiSource from './nhentai';
 import HentaiReadSource from './hentairead';
 import EHentaiSource from './ehentai';
-import IMHentaiSource from './imhentai';
+import HentaieraSource from './hentaiera';
 import AnchiraSource from './anchira';
 import ComickSource from './comick';
 
@@ -33,7 +33,7 @@ const SOURCES = {
   nhentai: NHentaiSource,
   hentairead: HentaiReadSource,
   ehentai: EHentaiSource,
-  imhentai: IMHentaiSource,
+  hentaiera: HentaieraSource,
   anchira: AnchiraSource,
 };
 
@@ -51,7 +51,7 @@ const sourceStatus = {
   nhentai: { name: 'NHentai', available: true, lastCheck: Date.now(), adult: true },
   hentairead: { name: 'HentaiRead', available: true, lastCheck: Date.now(), adult: true },
   ehentai: { name: 'E-Hentai', available: true, lastCheck: Date.now(), adult: true },
-  imhentai: { name: 'IMHentai', available: true, lastCheck: Date.now(), adult: true },
+  hentaiera: { name: 'Hentaiera', available: true, lastCheck: Date.now(), adult: true },
   anchira: { name: 'Anchira', available: true, lastCheck: Date.now(), adult: true },
 };
 

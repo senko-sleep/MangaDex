@@ -210,9 +210,9 @@ function getRefererForUrl(url) {
     if (hostname.includes('e-hentai') || hostname.includes('hath.network') || hostname.includes('exhentai')) {
       return 'https://e-hentai.org/';
     }
-    // IMHentai  
-    if (hostname.includes('imhentai')) {
-      return 'https://imhentai.xxx/';
+    // Hentaiera  
+    if (hostname.includes('hentaiera')) {
+      return 'https://hentaiera.com/';
     }
     // Hitomi
     if (hostname.includes('hitomi')) {
@@ -800,6 +800,26 @@ app.get('/api/manga/top-rated', async (req, res) => {
     res.json({ data });
   } catch (e) {
     log.error('TopRated failed', { error: e.message });
+    res.json({ data: [], error: e.message });
+  }
+});
+
+// Get manga details
+app.get('/api/manga/:id/chapters', async (req, res) => {
+  const startTime = Date.now();
+  const { id } = req.params;
+  try {
+    const data = await scrapers.getChapters(id);
+    const duration = Date.now() - startTime;
+
+    if (!data || data.length === 0) {
+      log.warn('No chapters found', { id, duration });
+    } else {
+      log.api('GET', `/api/manga/${id}/chapters`, 200, duration, { chapters: data.length });
+    }
+    res.json({ data });
+  } catch (e) {
+    log.error('Chapters failed', { id, error: e.message });
     res.json({ data: [], error: e.message });
   }
 });

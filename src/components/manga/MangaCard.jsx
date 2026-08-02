@@ -37,7 +37,7 @@ export default function MangaCard({ manga }) {
   const showImg = coverUrl && !imgError;
   
   return (
-    <Link to={`/manga/${manga.id}`} className="group block">
+    <Link to={`/manga/${encodeURIComponent(manga.id)}`} className="group block">
       <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
         {/* Cover */}
         <div className="aspect-[3/4] bg-zinc-800 relative overflow-hidden">

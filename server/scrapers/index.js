@@ -3,7 +3,7 @@ import MangaDexScraper from './mangadex.js';
 import { KitsuScraper } from './kitsu.js';
 import NHentaiScraper from './nhentai.js';
 import { EHentaiScraper } from './ehentai.js';
-import { IMHentaiScraper } from './imhentai.js';
+import HentaieraScraper from './hentaiera.js';
 import { BatoScraper } from './bato.js';
 
 // Fast cache - 5 min for results, check every 60s for cleanup
@@ -50,7 +50,7 @@ const scrapers = {
   // Adult content sources (using direct APIs)
   nhentai: new NHentaiScraper(),
   ehentai: new EHentaiScraper(),
-  imhentai: new IMHentaiScraper(),
+  hentaiera: new HentaieraScraper(),
   bato: new BatoScraper(),
 };
 
@@ -119,9 +119,9 @@ export const sources = {
       sort: ['popular'],
     },
   },
-  imhentai: {
-    id: 'imhentai',
-    name: 'IMHentai',
+  hentaiera: {
+    id: 'hentaiera',
+    name: 'Hentaiera',
     icon: '🎨',
     isAdult: true,
     enabled: true,

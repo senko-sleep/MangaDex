@@ -12,8 +12,9 @@ export async function GET(request, { params }) {
   
   try {
     const { id } = params;
+    const mangaId = decodeURIComponent(id);
     
-    if (!id) {
+    if (!mangaId) {
       return NextResponse.json(
         { error: 'Manga ID is required' },
         { status: 400 }
@@ -24,7 +25,7 @@ export async function GET(request, { params }) {
     let fromCache = false;
 
     // Check local database first
-    const localChapters = db.getChapters(id);
+    const localChapters = db.getChapters(mangaId);
     if (localChapters.length > 0) {
       chapters = localChapters;
       fromCache = true;
@@ -33,14 +34,14 @@ export async function GET(request, { params }) {
     // If no local chapters, fetch from sources
     if (chapters.length === 0) {
       try {
-        const manga = db.getManga(id);
+        const manga = db.getManga(mangaId);
         const title = manga?.title || '';
         
-        chapters = await sources.getChaptersFromAllSources(id, title);
+        chapters = await sources.getChaptersFromAllSources(mangaId, title);
         
         // Save to local database
         if (chapters.length > 0) {
-          db.saveChapters(id, chapters);
+          db.saveChapters(mangaId, chapters);
         }
       } catch (error) {
         log.warn(`Failed to fetch chapters from sources: ${error.message}`);
@@ -48,7 +49,7 @@ export async function GET(request, { params }) {
     }
 
     const duration = Date.now() - startTime;
-    log.info(`GET /api/manga/${id}/chapters - ${chapters.length} chapters (${duration}ms)`);
+    log.info(`GET /api/manga/${mangaId}/chapters - ${chapters.length} chapters (${duration}ms)`);
 
     return NextResponse.json({
       success: true,

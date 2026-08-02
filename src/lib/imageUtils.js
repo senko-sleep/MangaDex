@@ -7,6 +7,19 @@ const resolvedCoverCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Route Hentaiera CDN images through the backend proxy.
+ * Hentaiera serves mixed .webp/.jpg extensions (some pages are .webp, others .jpg).
+ * The proxy has extension fallback that resolves whichever extension exists.
+ */
+export function proxyHentaieraUrl(url) {
+  if (!url) return url;
+  if (url.includes('hentaiera.com') || url.includes('hentaiera.')) {
+    return `${API_URL}/api/proxy/image?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+/**
  * Normalizes cover URL - transforms relative proxy URLs to use full backend URL
  */
 export function normalizeCoverUrl(url) {
@@ -16,6 +29,11 @@ export function normalizeCoverUrl(url) {
   // This is needed because on Firebase hosting, /api/proxy/image won't work
   if (url.startsWith('/api/')) {
     return `${API_URL}${url}`;
+  }
+  
+  // Route Hentaiera covers through the proxy (handles mixed .webp/.jpg + hotlink protection)
+  if (url.includes('hentaiera.com') || url.includes('hentaiera.')) {
+    return proxyHentaieraUrl(url);
   }
   
   // For direct MangaDex URLs, fix wrong domains
@@ -30,7 +48,7 @@ export function normalizeCoverUrl(url) {
  * Get cover URL with fallback to existing sources
  */
 export function getCoverUrl(manga) {
-  const url = manga?.coverUrl || manga?.thumbnail || manga?.cover;
+  const url = manga?.coverUrl || manga?.thumbnail || manga?.cover || manga?.coverImage;
   return normalizeCoverUrl(url);
 }
 

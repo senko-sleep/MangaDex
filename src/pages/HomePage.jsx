@@ -55,12 +55,7 @@ function MangaCard({ manga, index, onNavigate, onImageError }) {
   const cover = getCoverUrl(manga);
   const sourceId = manga.sourceId || manga.id?.split(':')[0];
   const elementId = getMangaElementId(manga.id);
-
-  // If no cover, report as failed immediately
-  if (!cover) {
-    onImageError?.(manga.id);
-    return null;
-  }
+  const hasCover = Boolean(cover);
 
   return (
     <Link
@@ -72,20 +67,23 @@ function MangaCard({ manga, index, onNavigate, onImageError }) {
       onClick={() => onNavigate(manga.id)}
     >
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 card-lift">
-        {/* Cover Image */}
-        <img
-          src={cover}
-          alt=""
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => onImageError?.(manga.id)}
-        />
+        {hasCover ? (
+          <img
+            src={cover}
+            alt=""
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => onImageError?.(manga.id)}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm font-medium">
+            No cover available
+          </div>
+        )}
 
-        {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
 
-        {/* Top Badges */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
           <div className="flex gap-1">
             {manga.isLongStrip && (
@@ -108,14 +106,12 @@ function MangaCard({ manga, index, onNavigate, onImageError }) {
           </div>
         </div>
 
-        {/* Bottom Info */}
         <div className="absolute bottom-0 left-0 right-0 p-2.5">
           <h3 className="text-xs font-semibold text-white line-clamp-2 leading-tight group-hover:text-orange-400 transition-colors">
             {manga.title}
           </h3>
         </div>
 
-        {/* Hover Border */}
         <div className="absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-orange-500/50 transition-all" />
       </div>
     </Link>
@@ -473,7 +469,7 @@ export default function HomePage() {
     }
 
     // Sort filter
-    const currentSort = sortBy || (selectedSources.includes('imhentai') ? 'popular' : '');
+    const currentSort = sortBy || (selectedSources.includes('hentaiera') ? 'popular' : '');
     if (currentSort) {
       params.set('sort', currentSort);
     }
@@ -1108,12 +1104,12 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Artist Filter (Advanced) - visible when IMHentai selected */}
-                  {selectedSources.includes('imhentai') && (
+                  {/* Artist Filter (Advanced) - visible when Hentaiera selected */}
+                  {selectedSources.includes('hentaiera') && (
                     <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Camera className="w-3.5 h-3.5 text-pink-500" />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (IMHentai)</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Artist (Hentaiera)</span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2 w-full">
                         <input

@@ -12,7 +12,9 @@ export async function GET(request, { params }) {
   const startTime = Date.now();
   
   try {
-    const { id: mangaId, chapterId } = params;
+    const { id: rawMangaId, chapterId: rawChapterId } = params;
+    const mangaId = decodeURIComponent(rawMangaId);
+    const chapterId = decodeURIComponent(rawChapterId);
     
     if (!mangaId || !chapterId) {
       return NextResponse.json(

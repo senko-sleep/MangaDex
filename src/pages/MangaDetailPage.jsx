@@ -29,6 +29,8 @@ const clearDetailScrollPosition = (mangaId) => {
 
 // Compact Chapter Row Component
 function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }) {
+  const encodedMangaId = encodeURIComponent(mangaId);
+  const encodedChapterId = encodeURIComponent(chapter.id);
   const timeAgo = (date) => {
     if (!date) return '';
     const now = new Date();
@@ -45,7 +47,7 @@ function ChapterRow({ chapter, mangaId, isLongStrip, onNavigate, preferredLang }
 
   return (
     <Link
-      to={`/manga/${mangaId}/${chapter.id}`}
+      to={`/manga/${encodedMangaId}/${encodedChapterId}`}
       state={{ isLongStrip, preferredLang }}
       className="group flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors"
       onClick={onNavigate}
@@ -150,9 +152,9 @@ export default function MangaDetailPage() {
     setLoading(true);
     Promise.all([
       fetch(apiUrl(`/api/manga/${mangaId}`)).then(r => r.json()),
-      fetch(apiUrl(`/api/chapters/${mangaId}`)).then(r => r.json())
+      fetch(apiUrl(`/api/manga/${mangaId}/chapters`)).then(r => r.json())
     ]).then(([m, c]) => {
-      setManga(m);
+      setManga(m.data || m);
       const chapterData = c.data || [];
       setChapters(chapterData);
       
@@ -341,7 +343,7 @@ export default function MangaDetailPage() {
             <div className="mt-4 space-y-2">
               {firstChapter && (
                 <Link
-                  to={`/manga/${id}/${firstChapter.id}`}
+                  to={`/manga/${encodeURIComponent(id)}/${encodeURIComponent(firstChapter.id)}`}
                   state={{ isLongStrip: manga.isLongStrip, preferredLang: langFilter }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-semibold transition-colors shadow-lg shadow-orange-500/25"
                   onClick={handleChapterNavigate}
@@ -352,7 +354,7 @@ export default function MangaDetailPage() {
               )}
               {latestChapter && latestChapter !== firstChapter && (
                 <Link
-                  to={`/manga/${id}/${latestChapter.id}`}
+                  to={`/manga/${encodeURIComponent(id)}/${encodeURIComponent(latestChapter.id)}`}
                   state={{ isLongStrip: manga.isLongStrip, preferredLang: langFilter }}
                   className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
                   onClick={handleChapterNavigate}
