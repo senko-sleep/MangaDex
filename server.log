@@ -1,0 +1,330 @@
+[36m[INFO][0m 2026-08-02T02:51:08.884Z 🚀 Server running at http://localhost:3002 
+[36m[INFO][0m 2026-08-02T02:51:08.894Z 🔄 Priming startup cache... 
+[Scrapers] getPopular cacheKey: popular:1:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for bato { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=1 sort: popular
+[Bato] Fetching latest: https://batotoo.com/v3x-search?langs=en&sort=update&page=1
+[Bato] Fetching newly added: https://batotoo.com/v3x-search?langs=en&sort=create&page=1
+[Scrapers] getPopular cacheKey: popular:1:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for nhentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for ehentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[E-Hentai] Fetching popular: https://e-hentai.org
+[Scrapers] Calling getPopular for hentaiera { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Hentaiera] No popular endpoint, returning latest
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Scrapers] Calling getPopular for bato { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=1 sort: popular
+[E-Hentai] Fetching latest: https://e-hentai.org
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Bato] Fetching latest: https://batotoo.com/v3x-search?langs=en&sort=update&page=1
+[Scrapers] getPopular cacheKey: popular:1:popular:true:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:true:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Scrapers] Calling getPopular for nhentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Scrapers] Calling getPopular for ehentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[E-Hentai] Fetching popular: https://e-hentai.org
+[Scrapers] Calling getPopular for hentaiera { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Hentaiera] No popular endpoint, returning latest
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[E-Hentai] Fetching latest: https://e-hentai.org
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Scrapers] mangadex returned 50 results
+[Scrapers] mangadex returned 50 results
+[Scrapers] mangadex returned 50 results
+[Scrapers] hentaiera returned 25 results
+[NHentai] Parsed 25 galleries (25 total seen)
+[Scrapers] nhentai returned 25 results
+[NHentai] Parsed 25 galleries (25 total seen)
+[Scrapers] nhentai returned 25 results
+[NHentai] Parsed 30 galleries (30 total seen)
+[Scrapers] hentaiera returned 25 results
+[NHentai] Parsed 30 galleries (30 total seen)
+[Scrapers] kitsu returned 20 results
+[E-Hentai] Parsed 25 galleries (25 total seen)
+[Scrapers] ehentai returned 25 results
+[Scrapers] kitsu returned 20 results
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[Scrapers] ehentai returned 0 results
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[36m[INFO][0m 2026-08-02T02:51:17.024Z ✅ Startup cache primed in 8129ms {
+  sfwPopular: 70,
+  sfwLatest: 70,
+  sfwNew: 70,
+  adultPopular: 145,
+  adultOnlyPopular: 100
+}
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[35m[DEBUG][0m 2026-08-02T02:51:28.932Z Search request {
+  query: 'naruto',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '1'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=naruto&page=1
+[32m[API][0m 2026-08-02T02:51:29.392Z GET /api/manga/search 200 460ms { results: 20, query: 'naruto' }
+[32m[API][0m 2026-08-02T02:57:30.534Z GET /api/manga/kitsu:16550 200 508ms { title: 'Ao Haru Ride' }
+[32m[API][0m 2026-08-02T02:57:30.562Z GET /api/manga/kitsu:16550 200 0ms { title: 'Ao Haru Ride' }
+[Kitsu] Found MangaDex match for "Ao Haru Ride": mangadex:aa0399ae-d9e8-44ce-9459-30763de36604
+[MangaDex] Loaded 202 total chapters for aa0399ae-d9e8-44ce-9459-30763de36604
+[MangaDex] 197 unique chapters (0 external)
+[32m[API][0m 2026-08-02T02:57:31.606Z GET /api/manga/kitsu:16550/chapters 200 1647ms { chapters: 197 }
+[32m[API][0m 2026-08-02T02:57:31.620Z GET /api/manga/kitsu:16550/chapters 200 0ms { chapters: 197 }
+[36m[INFO][0m 2026-08-02T02:57:32.858Z 🔄 Priming startup cache... 
+[Scrapers] getPopular cacheKey: popular:1:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for bato { page: 1, sort: 'popular', includeAdult: false, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=1 sort: popular
+[Bato] Fetching latest: https://batotoo.com/v3x-search?langs=en&sort=update&page=1
+[Bato] Fetching newly added: https://batotoo.com/v3x-search?langs=en&sort=create&page=1
+[Scrapers] getPopular cacheKey: popular:1:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for nhentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Scrapers] Calling getPopular for ehentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[E-Hentai] Cleared seen IDs cache
+[E-Hentai] Fetching popular: https://e-hentai.org
+[Scrapers] Calling getPopular for hentaiera { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Hentaiera] No popular endpoint, returning latest
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Scrapers] Calling getPopular for bato { page: 1, sort: 'popular', includeAdult: true, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=1 sort: popular
+[E-Hentai] Fetching latest: https://e-hentai.org
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Bato] Fetching latest: https://batotoo.com/v3x-search?langs=en&sort=update&page=1
+[Scrapers] getPopular cacheKey: popular:1:popular:true:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:1:popular:true:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Scrapers] Calling getPopular for nhentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Scrapers] Calling getPopular for ehentai { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[E-Hentai] Fetching popular: https://e-hentai.org
+[Scrapers] Calling getPopular for hentaiera { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Hentaiera] No popular endpoint, returning latest
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[E-Hentai] Fetching latest: https://e-hentai.org
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[32m[API][0m 2026-08-02T02:57:32.904Z GET /api/bootstrap 200 46ms { popular: 70 }
+[35m[DEBUG][0m 2026-08-02T02:57:32.929Z Search request {
+  query: '',
+  sources: undefined,
+  adult: 'false',
+  status: undefined,
+  sort: 'popular',
+  page: '1'
+}
+[36m[INFO][0m 2026-08-02T02:57:32.931Z ⚡ Instant response from startup cache { results: 70, duration: 2 }
+[32m[API][0m 2026-08-02T02:57:32.931Z GET /api/manga/search 200 2ms { results: 70, query: '(popular)' }
+[32m[API][0m 2026-08-02T02:57:32.957Z GET /api/bootstrap 200 0ms { popular: 70 }
+[Scrapers] mangadex returned 50 results
+[Scrapers] mangadex returned 50 results
+[Scrapers] mangadex returned 50 results
+[35m[DEBUG][0m 2026-08-02T02:57:33.301Z Search request {
+  query: '',
+  sources: undefined,
+  adult: 'false',
+  status: undefined,
+  sort: 'popular',
+  page: '2'
+}
+[Scrapers] getPopular cacheKey: popular:2:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:2:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 2, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 2, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for bato { page: 2, sort: 'popular', includeAdult: false, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=2 sort: popular
+[Scrapers] hentaiera returned 25 results
+[NHentai] Cleared seen IDs cache
+[NHentai] Parsed 25 galleries (25 total seen)
+[Scrapers] nhentai returned 25 results
+[NHentai] Parsed 25 galleries (25 total seen)
+[Scrapers] nhentai returned 25 results
+[NHentai] Parsed 30 galleries (30 total seen)
+[NHentai] Parsed 30 galleries (30 total seen)
+[Scrapers] hentaiera returned 25 results
+[Scrapers] kitsu returned 20 results
+[Scrapers] mangadex returned 50 results
+[Scrapers] kitsu returned 20 results
+[E-Hentai] Parsed 25 galleries (25 total seen)
+[Scrapers] ehentai returned 25 results
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[Scrapers] ehentai returned 0 results
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[E-Hentai] Parsed 0 galleries (25 total seen)
+[Scrapers] kitsu returned 20 results
+[32m[API][0m 2026-08-02T02:57:39.603Z GET /api/bootstrap 200 0ms { popular: 100 }
+[35m[DEBUG][0m 2026-08-02T02:57:39.617Z Search request {
+  query: '',
+  sources: undefined,
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '1'
+}
+[36m[INFO][0m 2026-08-02T02:57:39.618Z ⚡ Instant response from startup cache { results: 100, duration: 1 }
+[32m[API][0m 2026-08-02T02:57:39.619Z GET /api/manga/search 200 2ms { results: 100, query: '(popular)' }
+[Bato] Cleared seen IDs cache
+[Bato] Parsed 0 results
+[36m[INFO][0m 2026-08-02T02:57:40.889Z ✅ Startup cache primed in 8031ms {
+  sfwPopular: 70,
+  sfwLatest: 70,
+  sfwNew: 70,
+  adultPopular: 145,
+  adultOnlyPopular: 100
+}
+[Bato] Parsed 0 results
+[Scrapers] bato returned 0 results
+[32m[API][0m 2026-08-02T02:57:40.899Z GET /api/manga/search 200 7598ms { results: 70, query: '(popular)' }
+[35m[DEBUG][0m 2026-08-02T02:57:40.910Z Search request {
+  query: '',
+  sources: undefined,
+  adult: 'false',
+  status: undefined,
+  sort: 'popular',
+  page: '3'
+}
+[Scrapers] getPopular cacheKey: popular:3:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:3:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 3, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 3, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for bato { page: 3, sort: 'popular', includeAdult: false, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=3 sort: popular
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Bato] Parsed 0 results
+[Scrapers] mangadex returned 50 results
+[35m[DEBUG][0m 2026-08-02T02:57:41.122Z Search request {
+  query: '',
+  sources: undefined,
+  adult: 'false',
+  status: undefined,
+  sort: 'popular',
+  page: '4'
+}
+[Scrapers] getPopular cacheKey: popular:4:popular:false:all, targetSources will be: all enabled
+[Scrapers] Cache miss for popular:4:popular:false:all, fetching...
+[Scrapers] Calling getPopular for mangadex { page: 4, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for kitsu { page: 4, sort: 'popular', includeAdult: false, adultOnly: false }
+[Scrapers] Calling getPopular for bato { page: 4, sort: 'popular', includeAdult: false, adultOnly: false }
+[Bato] Fetching: https://batotoo.com/v3x-search?langs=en&sort=views_a&page=4 sort: popular
+[Scrapers] mangadex returned 50 results
+[Scrapers] kitsu returned 20 results
+[Scrapers] kitsu returned 20 results
+[35m[DEBUG][0m 2026-08-02T02:57:42.072Z Search request {
+  query: '',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '1'
+}
+[Scrapers] getPopular cacheKey: popular:1:popular:true:hentaiera, targetSources will be: [ 'hentaiera' ]
+[Scrapers] Cache miss for popular:1:popular:true:hentaiera, fetching...
+[Scrapers] Calling getPopular for hentaiera { page: 1, sort: 'popular', includeAdult: true, adultOnly: true }
+[Hentaiera] No popular endpoint, returning latest
+[Hentaiera] Fetching latest: https://hentaiera.com/?page=1
+[Scrapers] hentaiera returned 25 results
+[32m[API][0m 2026-08-02T02:57:42.353Z GET /api/manga/search 200 281ms { results: 25, query: '(popular)' }
+[35m[DEBUG][0m 2026-08-02T02:57:45.524Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '1'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=1
+[Bato] Parsed 0 results
+[Scrapers] bato returned 0 results
+[32m[API][0m 2026-08-02T02:57:45.815Z GET /api/manga/search 200 4693ms { results: 70, query: '(popular)' }
+[32m[API][0m 2026-08-02T02:57:45.831Z GET /api/manga/search 200 307ms { results: 20, query: 'eevee' }
+[35m[DEBUG][0m 2026-08-02T02:57:45.913Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '2'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=2
+[Bato] Parsed 0 results
+[Scrapers] bato returned 0 results
+[32m[API][0m 2026-08-02T02:57:46.004Z GET /api/manga/search 200 5094ms { results: 70, query: '(popular)' }
+[32m[API][0m 2026-08-02T02:57:46.215Z GET /api/manga/search 200 302ms { results: 20, query: 'eevee' }
+[35m[DEBUG][0m 2026-08-02T02:57:46.223Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '3'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=3
+[32m[API][0m 2026-08-02T02:57:46.513Z GET /api/manga/search 200 290ms { results: 20, query: 'eevee' }
+[35m[DEBUG][0m 2026-08-02T02:57:46.519Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '4'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=4
+[32m[API][0m 2026-08-02T02:57:46.801Z GET /api/manga/search 200 282ms { results: 20, query: 'eevee' }
+[35m[DEBUG][0m 2026-08-02T02:57:49.163Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '5'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=5
+[32m[API][0m 2026-08-02T02:57:49.461Z GET /api/manga/search 200 298ms { results: 20, query: 'eevee' }
+[35m[DEBUG][0m 2026-08-02T03:19:17.640Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '6'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=6
+[35m[DEBUG][0m 2026-08-02T03:19:19.059Z Search request {
+  query: 'eevee',
+  sources: 'hentaiera',
+  adult: 'only',
+  status: undefined,
+  sort: 'popular',
+  page: '7'
+}
+[Hentaiera] Searching: https://hentaiera.com/search/?key=eevee&page=7
+[32m[API][0m 2026-08-02T03:19:19.159Z GET /api/manga/search 200 1519ms { results: 20, query: 'eevee' }
+[32m[API][0m 2026-08-02T03:19:19.433Z GET /api/manga/search 200 374ms { results: 20, query: 'eevee' }
+[Hentaiera] Fetching gallery details: https://hentaiera.com/gallery/1562243/
+[Hentaiera] Fetching gallery details: https://hentaiera.com/gallery/1562243/
+[32m[API][0m 2026-08-02T03:19:21.423Z GET /api/manga/hentaiera:1562243 200 215ms { title: '[Pixiv/fanbox/e621] Dagasi (15' }
+[32m[API][0m 2026-08-02T03:19:21.430Z GET /api/manga/hentaiera:1562243 200 0ms { title: '[Pixiv/fanbox/e621] Dagasi (15' }
+[32m[API][0m 2026-08-02T03:19:21.444Z GET /api/manga/hentaiera:1562243/chapters 200 228ms { chapters: 1 }
+[32m[API][0m 2026-08-02T03:19:21.455Z GET /api/manga/hentaiera:1562243/chapters 200 0ms { chapters: 1 }
+[Hentaiera] Fetching gallery details: https://hentaiera.com/gallery/1562243/
+[Hentaiera] Fetching gallery details: https://hentaiera.com/gallery/1562243/
+[32m[API][0m 2026-08-02T06:32:20.973Z GET /api/manga/hentaiera:1562243 200 1885ms { title: '[Pixiv/fanbox/e621] Dagasi (15' }
+[32m[API][0m 2026-08-02T06:32:21.050Z GET /api/manga/hentaiera:1562243/chapters 200 1800ms { chapters: 1 }
+[32m[API][0m 2026-08-02T06:32:21.056Z GET /api/manga/hentaiera:1562243 200 0ms { title: '[Pixiv/fanbox/e621] Dagasi (15' }
+[32m[API][0m 2026-08-02T06:32:21.061Z GET /api/manga/hentaiera:1562243/chapters 200 0ms { chapters: 1 }

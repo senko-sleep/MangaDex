@@ -25,20 +25,39 @@ class HentaieraScraper extends BaseScraper {
   // (.webp -> .jpg -> .png -> .gif) that resolves whichever extension actually exists.
   parseGalleryList($, isFirstPage = true) {
     const results = [];
+    const seenIds = new Set();
 
-    // Parse gallery items from the page using the actual HTML structure
-    $('a[href*="/gallery/"]').each((i, el) => {
+    // Parse gallery items from the page using the actual HTML structure.
+    // Each gallery is contained in a single `div.thumb` block. Parsing by block
+    // (instead of matching every `a[href*="/gallery/"]`) avoids duplicates, since
+    // each block contains BOTH a thumbnail image link AND a title link.
+    $('.thumb').each((i, el) => {
       const $el = $(el);
-      const href = $el.attr('href');
-      
+
+      // Find the gallery link (title link preferred, fall back to any gallery link)
+      let $link = $el.find('h2.gallery_title a[href*="/gallery/"]').first();
+      if ($link.length === 0) {
+        $link = $el.find('a[href*="/gallery/"]').first();
+      }
+
+      const href = $link.attr('href');
       if (!href || !href.includes('/gallery/')) return;
 
       const idMatch = href.match(/\/gallery\/(\d+)\//);
       if (!idMatch) return;
 
       const id = idMatch[1];
-      const title = $el.find('img').attr('alt') || $el.text().trim();
-      const thumb = $el.find('img').attr('data-src') || $el.find('img').attr('src');
+
+      // Deduplicate by gallery ID in case a page repeats a block
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+
+      // Title from the thumbnail image alt, fall back to the title link text
+      const $img = $el.find('img').first();
+      const title = $img.attr('alt') || $link.text().trim();
+
+      // Cover from the lazy-loaded thumbnail image (data-src), fall back to src
+      const thumb = $img.attr('data-src') || $img.attr('src');
 
       if (!title || title.includes('loading')) return;
 
@@ -253,7 +272,10 @@ class HentaieraScraper extends BaseScraper {
         page = options.page || 1;
       }
       
-      const searchUrl = `${this.baseUrl}/search/?q=${encodeURIComponent(query)}&page=${page}`;
+      // IMPORTANT: Hentaiera's search form uses `key` as the query parameter
+      // (NOT `q`). Using `?q=` causes Hentaiera to ignore the query and return
+      // the latest galleries instead of actual search matches.
+      const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(query)}&page=${page}`;
       console.log('[Hentaiera] Searching:', searchUrl);
       
       // Use simple fetch to avoid Cloudflare detection

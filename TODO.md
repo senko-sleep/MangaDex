@@ -1,62 +1,28 @@
-# TODO: Fix Hentaiera Gallery Reader
+# TODO: Fix Hentaiera Search
 
 ## Root Cause
-Hentaiera CDN serves gallery images with **mixed extensions** (verified for gallery 1702623:
-pages 1,3,4,6,7,8,9,10 = `.webp`, pages 2,5 = `.jpg`; cover = `.jpg`). Blindly converting
-everything to `.webp` breaks some pages/covers.
+Hentaiera search form uses `name="key"` as the search parameter, NOT `q`.
+The current code builds `/search/?q=${query}` which Hentaiera ignores, returning
+latest galleries instead of actual search matches.
 
-The backend image proxy `/api/proxy/image?url=...` has **extension fallback**
-(`.webp` -> `.jpg` -> `.png` -> `.gif`) and is proven to return 200 for ALL pages + covers.
+Additionally, `parseGalleryList` matches ALL `a[href*="/gallery/"]` anchors. Each
+gallery block has TWO anchors (thumbnail image link + title link), causing every
+result to be duplicated.
 
 ## Steps
-- [x] **Investigate** - Root cause analysis completed
-  - Hentaiera CDN serves mixed `.webp`/`.jpg` image extensions
-  - Backend `/api/proxy/image` with extension fallback resolves ALL images correctly
-  - `/api/manga/:id/chapters` and `/api/pages/:mangaId/:chapterId` work correctly
+- [x] Investigate - Confirmed search form uses `key` param
+- [x] Verify - `/search/?key=naruto` returns real Naruto results
+- [x] Fix `server/scrapers/hentaiera.js`
+  - [x] Change `search()` URL from `?q=` to `?key=`
+  - [x] Rewrite `parseGalleryList` to parse `div.thumb` blocks (no duplicates)
+- [x] Verify - Run `node tests/hentaiera.test.js` → 7 passed, 0 failed
+- [x] Verify - Run `node tests/hentaiera-backend.test.js` → 7 passed, 0 failed
+- [x] Verify - Backend `GET /api/manga/search?q=naruto&sources=hentaiera&adult=only` → 20 unique relevant results
+- [x] Verify - `node tests/verify-hentaiera-search.js` → 20 unique IDs, 0 duplicates, real matches
+- [x] Cleanup - Remove temporary debug scripts
 
-- [x] **Fix `server/scrapers/hentaiera.js`**
-  - Removed `toWebpUrl()` blanket conversion (broke pages 2/5 of mixed galleries)
-  - Emit original-extension URLs (`.jpg`) — proxy handles extension fallback
-  - Improved cover extraction: `data-src` on `.cover img`, `img[data-src*="cover."]`,
-    `img[data-src*="hentaiera"]`, then `.g_thumb img` fallback
-  - Thumbnail fallback keeps original extension (no forced `.webp`)
-
-- [x] **Fix `src/pages/ChapterReaderPage.jsx`**
-  - Add `toProxyUrl()` helper to route Hentaiera CDN images through `/api/proxy/image`
-  - Apply in `fetchFromBackend()` for Hentaiera page URLs
-  - Apply in `fetchHentaieraClientSide()` fallback URLs (primary loop + thumbnails)
-
-- [x] **Fix `src/lib/imageUtils.js`**
-  - Route Hentaiera cover URLs through the backend proxy in `normalizeCoverUrl()` /
-    `proxyHentaieraUrl()` — MangaCard, MangaGrid, MangaDetailPage all covered
-
-- [x] **Verify grid cards** - MangaCard uses `getCoverUrl()` which routes Hentaiera covers
-  through proxy (verified no change needed)
-
-- [x] **Run tests**
-  - `node tests/hentaiera-backend.test.js` → **7 passed, 0 failed**
-  - `node tests/hentaiera.test.js` → **7 passed, 0 failed**
-  - Verified `/api/proxy/image` returns 200 for all 10 pages of gallery 1702623
-    (pages 2 & 5 → `image/jpeg`, rest → `image/webp`)
-  - Cover proxy → `200 image/jpeg`
-  - Restarted backend + started Vite dev server; verified full flow via port 3000 proxy
-
-## Completed
-- Confirmed mixed extension behavior (pages 2,5 are `.jpg`, rest `.webp`)
-- Confirmed proxy extension fallback returns 200 for all pages + covers + thumbnails
-- Confirmed Express route ordering works (chapters + pages endpoints respond)
-- Detail endpoint returns coverUrl + title for gallery 1702623
-- All 10 chapter pages resolve through the reader path
-
-## Verification Commands
-```bash
-# Backend scraper tests
-node tests/hentaiera-backend.test.js
-
-# Source-level tests
-node tests/hentaiera.test.js
-
-# Check ports (3000 = Vite, 3002 = backend)
-node tests/check-ports.js
-```
+## Verification Results
+- Search "naruto" → 20 results, 20 unique IDs, 0 duplicates (NARUKO 4, Anko x Naruto & Sasuke, Jikage Rising, etc.)
+- Search "futanari" → 20 results, 20 unique IDs, 0 duplicates
+- Existing test suite still passes (7/7 in both test files)
 
