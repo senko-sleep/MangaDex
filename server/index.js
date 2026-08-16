@@ -40,20 +40,17 @@ async function primeCache() {
   const start = Date.now();
 
   try {
-    // Fetch all content modes in parallel for ultra-fast cache warming
-    const [
-      sfwPopular, sfwLatest, sfwNew,
-      adultPopular, adultLatest,
-      adultOnlyPopular, adultOnlyLatest
-    ] = await Promise.all([
-      // SFW content
+    // 1. Prime SFW content
+    const [sfwPopular, sfwLatest, sfwNew] = await Promise.all([
       scrapers.getPopular({ includeAdult: false, page: 1 }).catch(() => []),
       scrapers.getLatest({ includeAdult: false, page: 1 }).catch(() => []),
       scrapers.getNewlyAdded({ includeAdult: false, page: 1 }).catch(() => []),
-      // Mixed content (SFW + Adult)
+    ]);
+
+    // 2. Prime 18+ and mixed content
+    const [adultPopular, adultLatest, adultOnlyPopular, adultOnlyLatest] = await Promise.all([
       scrapers.getPopular({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
       scrapers.getLatest({ includeAdult: true, adultOnly: false, page: 1 }).catch(() => []),
-      // Adult only
       scrapers.getPopular({ includeAdult: true, adultOnly: true, page: 1 }).catch(() => []),
       scrapers.getLatest({ includeAdult: true, adultOnly: true, page: 1 }).catch(() => []),
     ]);
@@ -355,6 +352,15 @@ app.get('/api/proxy/image', async (req, res) => {
   }
 
   try {
+    // Some CDNs block datacenter/VPS IPs but work fine in browsers.
+    // For these, redirect directly so the browser fetches them without going through our server.
+    const blockedCdns = ['nhentaimg.com', 'hentaienvy.com'];
+    const urlHostname = new URL(imageUrl).hostname;
+    if (blockedCdns.some(cdn => urlHostname.includes(cdn))) {
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.redirect(302, imageUrl);
+    }
+
     // Check cache first
     const cached = imageCache.get(imageUrl);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -652,6 +658,11 @@ app.get('/api/manga/search', async (req, res) => {
     }
 
     const duration = Date.now() - startTime;
+    // For a search query with limited results (< 20), there's no next page
+    // For popular/latest browsing, hasMore is true if we got a full page
+    const hasMore = q
+      ? data.length >= 20  // search: more pages only if result count is full
+      : data.length >= 20; // browse: more pages if full page returned
 
     if (data.length === 0) {
       log.warn('Search returned no results', { query: q, sources: sourceIds, adult, duration });
@@ -659,7 +670,7 @@ app.get('/api/manga/search', async (req, res) => {
       log.api('GET', '/api/manga/search', 200, duration, { results: data.length, query: q || '(popular)' });
     }
 
-    res.json({ data, total: data.length });
+    res.json({ data, total: data.length, hasMore });
   } catch (e) {
     const duration = Date.now() - startTime;
     log.error('Search failed', { error: e.message, stack: e.stack, duration });

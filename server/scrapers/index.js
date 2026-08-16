@@ -10,10 +10,9 @@ import HentaiEnvyScraper from './hentaienvy.js';
 // Fast cache - 5 min for results, check every 60s for cleanup
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
-// Request timeout - balanced for ultra-fast instant UX
-// Ensures requests complete in under 3-4s even if a source is hanging
-const REQUEST_TIMEOUT = 4000;
-const FAST_TIMEOUT = 2500; // For initial page load
+// Request timeout - balanced for cloud container reliability
+const REQUEST_TIMEOUT = 10000;
+const FAST_TIMEOUT = 6000; // For initial page load
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {

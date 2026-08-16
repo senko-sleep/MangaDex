@@ -500,7 +500,8 @@ export default function HomePage() {
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
-        prefetchCache.current.set(cacheKey, json.data || []);
+        // Cache the full response so hasMore is available
+        prefetchCache.current.set(cacheKey, { data: json.data || [], hasMore: json.hasMore ?? (json.data?.length >= 20) });
       }
     } catch {
       // Silent fail for prefetch
@@ -518,14 +519,18 @@ export default function HomePage() {
       const cacheKey = url;
 
       let data;
+      let serverHasMore = false;
       if (prefetchCache.current.has(cacheKey)) {
-        data = prefetchCache.current.get(cacheKey);
+        const cached = prefetchCache.current.get(cacheKey);
+        data = cached.data || cached;
+        serverHasMore = cached.hasMore ?? (data.length >= 20);
         prefetchCache.current.delete(cacheKey);
       } else {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         data = json.data || [];
+        serverHasMore = json.hasMore ?? (data.length >= 20);
       }
 
       // Filter based on content rating
@@ -553,14 +558,12 @@ export default function HomePage() {
       }
 
       setPage(p);
-      setHasMore(data.length >= 20);
+      setHasMore(serverHasMore);
       setInitialLoad(false);
 
-      // Prefetch next 2 pages for faster infinite scroll
-      if (data.length >= 20) {
+      // Prefetch next page for smoother scrolling (only if server says there's more)
+      if (serverHasMore) {
         prefetchNextPage(p + 1);
-        // Also prefetch page after next for even smoother scrolling
-        setTimeout(() => prefetchNextPage(p + 2), 200);
       }
     } catch (e) {
       console.error('[MangaFox] Fetch error:', e);
@@ -630,6 +633,7 @@ export default function HomePage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         let data = json.data || [];
+        const serverHasMore = json.hasMore ?? (data.length >= 20);
 
         // Filter based on content rating
         if (contentRating === 'adult') {
@@ -645,7 +649,7 @@ export default function HomePage() {
 
         setManga(data);
         setPage(1);
-        setHasMore(data.length >= 20);
+        setHasMore(serverHasMore);
         setInitialLoad(false);
       } catch (e) {
         console.error('[MangaFox] Fetch error:', e);

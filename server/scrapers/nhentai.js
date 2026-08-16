@@ -122,8 +122,8 @@ export class NHentaiScraper extends BaseScraper {
         return this.getPopular(page, includeAdult, tags, excludeTags, language);
       }
 
-      // nhentai.xxx uses 'key' parameter, not 'q'
-      const url = `${this.baseUrl}/search/?key=${encodeURIComponent(searchQuery)}&page=${page}`;
+      // nhentai.xxx uses 'q' parameter for search
+      const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery)}&page=${page}`;
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html, page === 1);
