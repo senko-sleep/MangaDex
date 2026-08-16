@@ -163,21 +163,21 @@ export class BaseScraper {
         'Cache-Control': 'max-age=0',
       });
 
-      // Navigate with wait for network idle to ensure Cloudflare challenge completes
+      // Navigate with domcontentloaded to avoid hanging on ad networks / analytics
       await page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: 45000,
+        waitUntil: 'domcontentloaded',
+        timeout: 15000,
       });
 
-      // Wait for Cloudflare JS challenge to solve
-      await new Promise(r => setTimeout(r, 3000));
+      // Wait 1.5s for Cloudflare challenge or dynamic JS rendering
+      await new Promise(r => setTimeout(r, 1500));
 
       let html = await page.content();
 
       // Check if we're still on Cloudflare challenge page
       if (isCloudflareChallenge(html)) {
         console.log(`[${this.name}] Cloudflare still blocking after initial wait, extending wait...`);
-        await new Promise(r => setTimeout(r, 15000));
+        await new Promise(r => setTimeout(r, 5000));
         html = await page.content();
       }
 

@@ -255,6 +255,7 @@ export class EHentaiScraper extends BaseScraper {
 
   parseGalleryList($) {
     const results = [];
+    const seenIds = new Set();
 
     $('table.itg tr, .gl1t').each((_, el) => {
       const $el = $(el);
@@ -268,11 +269,11 @@ export class EHentaiScraper extends BaseScraper {
       const [, gid, token] = match;
       const galleryId = `${gid}_${token}`;
 
-      // Skip if we've already seen this gallery (deduplication)
-      if (this.seenIds.has(galleryId)) {
+      // Skip if we've already seen this gallery (deduplication within same page)
+      if (seenIds.has(galleryId)) {
         return;
       }
-      this.seenIds.add(galleryId);
+      seenIds.add(galleryId);
 
       const title =
         $el.find('.glink, .gl4t a').text().trim() || link.text().trim();

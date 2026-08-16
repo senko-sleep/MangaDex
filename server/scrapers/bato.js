@@ -4,10 +4,9 @@ import BaseScraper from './base.js';
 const API_BASE = process.env.API_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
 
 // Bato.to - Large manga library with multiple languages
-// Note: bato.to redirects to batotoo.com
 export class BatoScraper extends BaseScraper {
   constructor() {
-    super('Bato', 'https://batotoo.com', false);
+    super('Bato', 'https://wto.to', false);
     // Track seen IDs to prevent duplicates across pagination
     this.seenIds = new Set();
     this.lastClearTime = Date.now();
@@ -195,14 +194,7 @@ export class BatoScraper extends BaseScraper {
 
   parseSearchResults($, resetSeenIds = false) {
     const results = [];
-
-    // Reset seen IDs at start of new browsing session (page 1)
-    if (resetSeenIds) {
-      this.seenIds.clear();
-    }
-
-    // Check if cache needs clearing (TTL-based)
-    this.clearSeenIdsIfStale();
+    const seenIds = new Set();
 
     // Bato v3 search results - each manga card contains title link and cover
     // Look for the manga title link which goes to /title/ or /series/
@@ -222,8 +214,8 @@ export class BatoScraper extends BaseScraper {
 
       const slug = match[1];
 
-      // Skip if we've already seen this manga (deduplication)
-      if (this.seenIds.has(slug)) return;
+      // Skip if we've already seen this manga (deduplication within same page)
+      if (seenIds.has(slug)) return;
 
       // Get the card/container element - go up to find a container with an image
       let $card = $link.parent();
@@ -289,7 +281,7 @@ export class BatoScraper extends BaseScraper {
         ['smut', 'mature', 'adult', 'hentai', 'yaoi', 'yuri', 'bara', 'gore'].includes(g)
       ) || cardText.includes('smut') || cardText.includes('mature') || cardText.includes('18+');
 
-      this.seenIds.add(slug);
+      seenIds.add(slug);
       results.push({
         id: `bato:${slug}`,
         sourceId: 'bato',
