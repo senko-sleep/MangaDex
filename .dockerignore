@@ -30,7 +30,6 @@ tsconfig.json
 jsconfig.json
 index.html
 components.json
-yarn.lock
 docker-compose.yml
 Dockerfile
 .dockerignore
