@@ -6,9 +6,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json yarn.lock ./
 
-# Install production dependencies only (skip playwright browser download)
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Install production dependencies
 RUN yarn install --production --frozen-lockfile
+
+# Install Playwright browsers (needed for Bato scraper fallback)
+RUN npx playwright install chromium
 
 # ---- Production stage ----
 FROM node:20-slim
