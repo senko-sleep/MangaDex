@@ -11,9 +11,9 @@ import HentaiEnvyScraper from './hentaienvy.js';
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
 // Request timeout - balanced for reliability vs UX
-// Allows slower sources to complete while not blocking too long
-const REQUEST_TIMEOUT = 8000;
-const FAST_TIMEOUT = 5000; // For initial page load
+// Allows slower sources and Playwright bypass to complete
+const REQUEST_TIMEOUT = 20000;
+const FAST_TIMEOUT = 8000; // For initial page load
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
@@ -27,8 +27,6 @@ const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
 // Get appropriate timeout for source - some sources are known to be slower
 const getTimeoutForSource = (sourceId, isFastMode = false) => {
   if (isFastMode) return FAST_TIMEOUT;
-  // E-Hentai can be slower due to rate limiting
-  if (sourceId === 'ehentai') return 6000;
   return REQUEST_TIMEOUT;
 };
 

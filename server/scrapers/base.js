@@ -203,16 +203,45 @@ export class BaseScraper {
     }
   }
 
-  // Core HTTP fetch using Playwright as primary method - returns HTML text
+  // Playwright concurrency limit to prevent overwhelming CPU/RAM
+  static playwrightQueue = [];
+  static activePlaywrightCount = 0;
+  static MAX_CONCURRENT_PLAYWRIGHT = 2;
+
+  async acquirePlaywrightSlot() {
+    if (BaseScraper.activePlaywrightCount < BaseScraper.MAX_CONCURRENT_PLAYWRIGHT) {
+      BaseScraper.activePlaywrightCount++;
+      return;
+    }
+    await new Promise(resolve => BaseScraper.playwrightQueue.push(resolve));
+    BaseScraper.activePlaywrightCount++;
+  }
+
+  releasePlaywrightSlot() {
+    BaseScraper.activePlaywrightCount--;
+    if (BaseScraper.playwrightQueue.length > 0) {
+      const next = BaseScraper.playwrightQueue.shift();
+      next();
+    }
+  }
+
+  // Core HTTP fetch: Try fast native fetch first, fallback to Playwright when blocked by Cloudflare
   async fetchHtml(url, options = {}) {
     await this.waitForRateLimit();
 
-    // Skip Playwright for Hentaiera (too slow and unreliable)
-    if (this.name === 'Hentaiera') {
-      return this.fetchWithNativeFetch(url, options);
+    // 1. Try fast native fetch first (100-300ms)
+    try {
+      const body = await this.fetchWithNativeFetch(url, options);
+      if (!isCloudflareChallenge(body)) {
+        return body;
+      }
+      console.log(`[${this.name}] Cloudflare challenge detected on native fetch, trying Playwright for: ${url}`);
+    } catch (nativeError) {
+      console.log(`[${this.name}] Native fetch failed (${nativeError.message}), trying Playwright: ${url}`);
     }
 
-    // Use Playwright as primary method for all other scrapers
+    // 2. Fallback to Playwright for Cloudflare bypass
+    await this.acquirePlaywrightSlot();
     try {
       console.log(`[${this.name}] Using Playwright for: ${url}`);
       const body = await this.fetchWithPlaywright(url);
@@ -221,13 +250,10 @@ export class BaseScraper {
       }
       return body;
     } catch (pwError) {
-      console.warn(`[${this.name}] Playwright failed (${pwError.message}), trying native fetch: ${url}`);
-      try {
-        return await this.fetchWithNativeFetch(url, options);
-      } catch (nativeError) {
-        console.error(`[${this.name}] Both Playwright and native fetch failed`);
-        throw pwError;
-      }
+      console.error(`[${this.name}] Playwright fetch failed: ${pwError.message}`);
+      throw pwError;
+    } finally {
+      this.releasePlaywrightSlot();
     }
   }
 
@@ -325,20 +351,26 @@ export class BaseScraper {
   }
 
   // Fetch JSON
-  async fetchJson(url) {
+  async fetchJson(url, options = {}) {
     await this.waitForRateLimit();
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json,*/*',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    } catch (e) {
-      console.error(`[${this.name}] fetchJson failed: ${url}`, { error: e.message });
-      return null;
+      const res = await this.client.get(url, options);
+      return res.data;
+    } catch (axiosError) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/vnd.api+json,application/json,*/*',
+            ...(options.headers || {}),
+          },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (e) {
+        console.error(`[${this.name}] fetchJson failed: ${url}`, { error: e.message || axiosError.message });
+        return null;
+      }
     }
   }
 

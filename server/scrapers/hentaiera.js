@@ -83,19 +83,8 @@ class HentaieraScraper extends BaseScraper {
       const url = `${this.baseUrl}/gallery/${gid}/`;
       console.log('[Hentaiera] Fetching gallery details:', url);
       
-      // Use simple fetch to avoid Cloudflare detection
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const html = await response.text();
-      const $ = this.loadHtml(html);
+      const $ = await this.fetch(url);
+      if (!$) return null;
 
       const title = $('h1').first().text().trim() || $('.title').first().text().trim();
       
@@ -182,19 +171,8 @@ class HentaieraScraper extends BaseScraper {
       
       const url = `${this.baseUrl}/gallery/${gid}/`;
       
-      // Use simple fetch to avoid Cloudflare detection
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const html = await response.text();
-      const $ = this.loadHtml(html);
+      const $ = await this.fetch(url);
+      if (!$) return [];
 
       const pages = [];
 
@@ -278,19 +256,8 @@ class HentaieraScraper extends BaseScraper {
       const searchUrl = `${this.baseUrl}/search/?key=${encodeURIComponent(query)}&page=${page}`;
       console.log('[Hentaiera] Searching:', searchUrl);
       
-      // Use simple fetch to avoid Cloudflare detection
-      const response = await fetch(searchUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const html = await response.text();
-      const $ = this.loadHtml(html);
+      const $ = await this.fetch(searchUrl);
+      if (!$) return [];
       
       return this.parseGalleryList($, page === 1);
     } catch (e) {
@@ -312,19 +279,10 @@ class HentaieraScraper extends BaseScraper {
       const latestUrl = `${this.baseUrl}/?page=${page}`;
       console.log('[Hentaiera] Fetching latest:', latestUrl);
       
-      // Use simple fetch to avoid Cloudflare detection
-      const response = await fetch(latestUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      const $ = await this.fetch(latestUrl);
+      if (!$) {
+        return { results: [], hasMore: false, nextPage: 1 };
       }
-      
-      const html = await response.text();
-      const $ = this.loadHtml(html);
       
       const results = this.parseGalleryList($, page === 1);
 
