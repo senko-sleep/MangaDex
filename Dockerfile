@@ -4,11 +4,11 @@ FROM node:20-slim AS deps
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json yarn.lock ./
 
 # Install production dependencies only (skip playwright browser download)
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-RUN npm ci --omit=dev
+RUN yarn install --production --frozen-lockfile
 
 # ---- Production stage ----
 FROM node:20-slim
