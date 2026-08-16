@@ -461,16 +461,24 @@ app.post('/api/report/image-fail', express.json(), (req, res) => {
   }
 
   try {
-    const hostname = new URL(url).hostname;
-    const source = hostname.split('.').slice(-2, -1)[0] || 'unknown';
+    let targetUrl = url;
+    if (url.includes('/api/proxy/image') && url.includes('url=')) {
+      const match = url.match(/[?&]url=([^&]+)/);
+      if (match) targetUrl = decodeURIComponent(match[1]);
+    }
+    let source = 'unknown';
+    try {
+      const hostname = new URL(targetUrl, 'http://localhost').hostname;
+      source = hostname.split('.').slice(-2, -1)[0] || 'unknown';
+    } catch {}
 
-    log.error('🖼️ CLIENT IMAGE FAIL', {
+    log.warn('🖼️ CLIENT IMAGE FAIL', {
       source,
       mangaId: mangaId || 'unknown',
       chapterId: chapterId || 'unknown',
       page: page || 'unknown',
       error: error || 'load error',
-      url: url.substring(0, 120)
+      url: targetUrl.substring(0, 120)
     });
 
     res.json({ reported: true });
