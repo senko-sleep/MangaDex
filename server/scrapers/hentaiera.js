@@ -315,6 +315,14 @@ class HentaieraScraper extends BaseScraper {
       };
     }
   }
+
+  async getNewlyAdded(page = 1) {
+    return this.getLatest(page);
+  }
+
+  async getTopRated(page = 1) {
+    return this.getPopular(page);
+  }
 }
 
 export default HentaieraScraper;

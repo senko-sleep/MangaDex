@@ -477,8 +477,8 @@ app.post('/api/report/image-fail', express.json(), (req, res) => {
 // Bootstrap endpoint - get everything needed for homepage in one go
 app.get('/api/bootstrap', async (req, res) => {
   const startTime = Date.now();
-  const includeAdult = req.query.adult === 'true';
-  const adultOnly = req.query.adultOnly === 'true';
+  const adultOnly = req.query.adult === 'only' || req.query.adultOnly === 'true';
+  const includeAdult = req.query.adult === 'true' || adultOnly;
 
   try {
     // 1. Get sources and content types (fast, synchronous)
@@ -529,8 +529,8 @@ app.get('/api/bootstrap', async (req, res) => {
 
 // Get available sources
 app.get('/api/sources', (req, res) => {
-  const includeAdult = req.query.adult === 'true';
-  const adultOnly = req.query.adultOnly === 'true';
+  const adultOnly = req.query.adult === 'only' || req.query.adultOnly === 'true';
+  const includeAdult = req.query.adult === 'true' || adultOnly;
   const allSources = scrapers.getSources(includeAdult, adultOnly);
 
   // Build content types list from sources

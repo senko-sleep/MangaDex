@@ -10,10 +10,10 @@ import HentaiEnvyScraper from './hentaienvy.js';
 // Fast cache - 5 min for results, check every 60s for cleanup
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
 
-// Request timeout - balanced for reliability vs UX
-// Allows slower sources and Playwright bypass to complete
-const REQUEST_TIMEOUT = 20000;
-const FAST_TIMEOUT = 8000; // For initial page load
+// Request timeout - balanced for ultra-fast instant UX
+// Ensures requests complete in under 3-4s even if a source is hanging
+const REQUEST_TIMEOUT = 4000;
+const FAST_TIMEOUT = 2500; // For initial page load
 
 // Wrap scraper call with timeout
 const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
@@ -24,7 +24,7 @@ const withTimeout = (promise, ms = REQUEST_TIMEOUT) => {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 };
 
-// Get appropriate timeout for source - some sources are known to be slower
+// Get appropriate timeout for source
 const getTimeoutForSource = (sourceId, isFastMode = false) => {
   if (isFastMode) return FAST_TIMEOUT;
   return REQUEST_TIMEOUT;
@@ -45,8 +45,7 @@ const scrapers = {
   // Mainstream manga sources
   mangadex: new MangaDexScraper(),
   kitsu: new KitsuScraper(),
-  // mangaupdates: new MangaUpdatesScraper(), // Removed - slow
-  // Adult content sources (using direct APIs)
+  // Adult content sources
   nhentai: new NHentaiScraper(),
   ehentai: new EHentaiScraper(),
   hentaiera: new HentaieraScraper(),
@@ -85,7 +84,6 @@ export const sources = {
       sort: ['popular', 'latest', 'rating'],
     },
   },
-  // mangaupdates removed - slow API
   // Adult content sources
   nhentai: {
     id: 'nhentai',
@@ -124,7 +122,7 @@ export const sources = {
     name: 'Hentaiera',
     icon: '🎨',
     isAdult: true,
-    enabled: true,
+    enabled: false, // Disabled by default due to Cloudflare Turnstile blocks
     description: 'Large adult content library',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset'],
     filters: {
@@ -154,7 +152,7 @@ export const sources = {
     name: 'Bato.to',
     icon: '📚',
     isAdult: false,
-    enabled: true,
+    enabled: false, // Disabled by default due to Cloudflare Turnstile blocks
     description: 'Manga reader with multiple sources',
     contentTypes: ['manga', 'manhwa', 'manhua', 'webtoon'],
     filters: {

@@ -47,16 +47,9 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  parseGalleryList(html, resetSeenIds = false) {
+  parseGalleryList(html) {
     const results = [];
-
-    // Reset seen IDs at start of new browsing session (page 1)
-    if (resetSeenIds) {
-      this.seenIds.clear();
-    }
-
-    // Check if cache needs clearing (TTL-based)
-    this.clearSeenIdsIfStale();
+    const seenIds = new Set();
 
     // Match gallery_item containers for nhentai.xxx
     const galleryRegex = /<div[^>]*class="gallery_item"[^>]*>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/gi;
@@ -76,11 +69,11 @@ export class NHentaiScraper extends BaseScraper {
       if (linkMatch) {
         const id = linkMatch[1];
 
-        // Skip if we've already seen this gallery (deduplication)
-        if (this.seenIds.has(id)) {
+        // Skip if we've already seen this gallery (deduplication within same page)
+        if (seenIds.has(id)) {
           continue;
         }
-        this.seenIds.add(id);
+        seenIds.add(id);
 
         // Prefer title attribute, then caption text
         let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
@@ -90,8 +83,16 @@ export class NHentaiScraper extends BaseScraper {
         results.push(this.formatGallery({ id, title, coverUrl }));
       }
     }
-    console.log(`[NHentai] Parsed ${results.length} galleries (${this.seenIds.size} total seen)`);
+    console.log(`[NHentai] Parsed ${results.length} galleries`);
     return results;
+  }
+
+  async getNewlyAdded(page = 1) {
+    return this.getLatest(page);
+  }
+
+  async getTopRated(page = 1) {
+    return this.getPopular(page);
   }
 
   async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
