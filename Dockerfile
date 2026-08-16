@@ -9,8 +9,8 @@ COPY package.json yarn.lock ./
 # Install production dependencies
 RUN yarn install --production --frozen-lockfile
 
-# Install Playwright browsers (needed for Bato scraper fallback)
-RUN npx playwright install chromium
+# Install all Playwright browsers for comprehensive scraping support
+RUN npx playwright install chromium firefox webkit
 
 # ---- Production stage ----
 FROM node:20-slim

@@ -203,10 +203,36 @@ export class BaseScraper {
     }
   }
 
-  // Core HTTP fetch using native fetch - returns HTML text
+  // Core HTTP fetch using Playwright as primary method - returns HTML text
   async fetchHtml(url, options = {}) {
     await this.waitForRateLimit();
 
+    // Skip Playwright for Hentaiera (too slow and unreliable)
+    if (this.name === 'Hentaiera') {
+      return this.fetchWithNativeFetch(url, options);
+    }
+
+    // Use Playwright as primary method for all other scrapers
+    try {
+      console.log(`[${this.name}] Using Playwright for: ${url}`);
+      const body = await this.fetchWithPlaywright(url);
+      if (isCloudflareChallenge(body)) {
+        throw new Error('Cloudflare challenge not solved by Playwright');
+      }
+      return body;
+    } catch (pwError) {
+      console.warn(`[${this.name}] Playwright failed (${pwError.message}), trying native fetch: ${url}`);
+      try {
+        return await this.fetchWithNativeFetch(url, options);
+      } catch (nativeError) {
+        console.error(`[${this.name}] Both Playwright and native fetch failed`);
+        throw pwError;
+      }
+    }
+  }
+
+  // Native fetch fallback (original method)
+  async fetchWithNativeFetch(url, options = {}) {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -228,21 +254,6 @@ export class BaseScraper {
       const response = await fetch(url, { ...options, headers });
 
       if (!response.ok) {
-        // On 403, check for Cloudflare challenge
-        let body = await response.text().catch(() => '');
-        if (response.status === 403 && isCloudflareChallenge(body)) {
-          // Skip Playwright for Hentaiera (too slow and unreliable)
-          if (this.name === 'Hentaiera') {
-            console.warn(`[${this.name}] Cloudflare detected, skipping Playwright (too slow) for: ${url}`);
-            throw new Error(`HTTP ${response.status}: Cloudflare challenge - use client-side fetching`);
-          }
-          console.warn(`[${this.name}] Cloudflare detected, falling back to Playwright for: ${url}`);
-          body = await this.fetchWithPlaywright(url);
-          if (isCloudflareChallenge(body)) {
-            throw new Error(`HTTP ${response.status}: Cloudflare challenge`);
-          }
-          return body;
-        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -250,40 +261,12 @@ export class BaseScraper {
 
       // Check for Cloudflare challenge even on 200 responses
       if (isCloudflareChallenge(body)) {
-        // Skip Playwright for Hentaiera (too slow and unreliable)
-        if (this.name === 'Hentaiera') {
-          console.warn(`[${this.name}] Cloudflare challenge detected, skipping Playwright (too slow) for: ${url}`);
-          throw new Error('Cloudflare challenge - use client-side fetching');
-        }
-        console.warn(`[${this.name}] Cloudflare challenge detected on ${response.status} response, falling back to Playwright for: ${url}`);
-        const pwBody = await this.fetchWithPlaywright(url);
-        if (isCloudflareChallenge(pwBody)) {
-          throw new Error('Cloudflare challenge not solved by Playwright');
-        }
-        return pwBody;
+        throw new Error('Cloudflare challenge - need Playwright');
       }
 
       return body;
     } catch (error) {
-      if (isCloudflareChallenge(error.message)) {
-        throw error;
-      }
-      // Network error or other - try Playwright as last resort (but not for Hentaiera)
-      if (this.name === 'Hentaiera') {
-        console.warn(`[${this.name}] Fetch failed (${error.message}), skipping Playwright for Hentaiera`);
-        throw error;
-      }
-      console.warn(`[${this.name}] Fetch failed (${error.message}), trying Playwright: ${url}`);
-      try {
-        const body = await this.fetchWithPlaywright(url);
-        if (isCloudflareChallenge(body)) {
-          throw new Error('Cloudflare challenge not solved');
-        }
-        return body;
-      } catch (pwError) {
-        console.error(`[${this.name}] Playwright fallback also failed: ${pwError.message}`);
-        throw error;
-      }
+      throw error;
     }
   }
 
@@ -302,6 +285,29 @@ export class BaseScraper {
   async head(url, options = {}) {
     await this.waitForRateLimit();
 
+    // Skip Playwright for Hentaiera
+    if (this.name === 'Hentaiera') {
+      return this.headWithNativeFetch(url, options);
+    }
+
+    // Use Playwright as primary method
+    try {
+      console.log(`[${this.name}] Using Playwright for HEAD: ${url}`);
+      await this.fetchWithPlaywright(url);
+      return { status: 200 };
+    } catch (pwError) {
+      console.warn(`[${this.name}] Playwright HEAD failed (${pwError.message}), trying native fetch: ${url}`);
+      try {
+        return await this.headWithNativeFetch(url, options);
+      } catch (nativeError) {
+        console.error(`[${this.name}] Both Playwright and native HEAD failed`);
+        throw pwError;
+      }
+    }
+  }
+
+  // Native HEAD fallback
+  async headWithNativeFetch(url, options = {}) {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': '*/*',
@@ -314,14 +320,7 @@ export class BaseScraper {
       const response = await fetch(url, { method: 'HEAD', headers });
       return { status: response.status };
     } catch (error) {
-      // Try Playwright as fallback for HEAD (Cloudflare may block HEAD requests)
-      console.warn(`[${this.name}] HEAD failed (${error.message}), trying Playwright: ${url}`);
-      try {
-        await this.fetchWithPlaywright(url);
-        return { status: 200 };
-      } catch {
-        throw error;
-      }
+      throw error;
     }
   }
 
