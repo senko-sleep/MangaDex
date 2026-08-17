@@ -211,6 +211,10 @@ function getRefererForUrl(url) {
     if (hostname.includes('hentaiera')) {
       return 'https://hentaiera.com/';
     }
+    // HentaiEnvy
+    if (hostname.includes('hentaienvy')) {
+      return 'https://hentaienvy.com/';
+    }
     // HentaiForce
     if (hostname.includes('hentaiforce')) {
       return 'https://hentaiforce.net/';
@@ -358,7 +362,7 @@ app.get('/api/proxy/image', async (req, res) => {
   try {
     // Some CDNs block datacenter/VPS IPs but work fine in browsers.
     // For these, redirect directly so the browser fetches them without going through our server.
-    const blockedCdns = ['nhentaimg.com', 'hentaienvy.com'];
+    const blockedCdns = ['nhentaimg.com'];
     const urlHostname = new URL(imageUrl).hostname;
     if (blockedCdns.some(cdn => urlHostname.includes(cdn))) {
       res.set('Cache-Control', 'public, max-age=86400');

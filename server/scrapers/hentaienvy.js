@@ -285,14 +285,28 @@ export class HentaiEnvyScraper extends BaseScraper {
       const loadId  = loadIdMatch[1];
       const total   = parseInt(pagesMatch[1]);
 
-      console.log(`[HentaiEnvy] Gallery ${galleryId}: server=${server}, dir=${dir}, id=${loadId}, pages=${total}`);
+      // Determine extension: fetch reader page 1 to check actual extension (webp vs jpg vs png)
+      let ext = 'webp';
+      try {
+        const readerHtml = await this.fetchHtml(`${this.baseUrl}/g/${galleryId}/1/`);
+        if (readerHtml) {
+          const imgMatch = readerHtml.match(/https:\/\/m\d+\.hentaienvy\.com\/[^"']+\/1\.([a-zA-Z0-9]+)/i);
+          if (imgMatch) {
+            ext = imgMatch[1];
+          }
+        }
+      } catch (e) {
+        // Default to webp
+      }
+
+      console.log(`[HentaiEnvy] Gallery ${galleryId}: server=${server}, dir=${dir}, id=${loadId}, pages=${total}, ext=${ext}`);
 
       // Build pages using the CDN pattern:
       // Thumbnail: https://m{server}.hentaienvy.com/{dir}/{load_id}/{N}t.jpg
-      // Full image: https://m{server}.hentaienvy.com/{dir}/{load_id}/{N}.jpg
+      // Full image: https://m{server}.hentaienvy.com/{dir}/{load_id}/{N}.{ext}
       const pages = [];
       for (let i = 1; i <= total; i++) {
-        const baseImgUrl = `https://m${server}.hentaienvy.com/${dir}/${loadId}/${i}.jpg`;
+        const baseImgUrl = `https://m${server}.hentaienvy.com/${dir}/${loadId}/${i}.${ext}`;
         pages.push({
           page: i,
           url: this.proxyUrl(baseImgUrl),
