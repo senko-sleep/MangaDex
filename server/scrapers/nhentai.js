@@ -47,15 +47,18 @@ export class NHentaiScraper extends BaseScraper {
     }
   }
 
-  parseGalleryList(html) {
+  parseGalleryList(html, resetSeen = false) {
+    if (resetSeen) this.seenIds.clear();
+    this.clearSeenIdsIfStale();
+
     const results = [];
-    const seenIds = new Set();
+    if (!html) return results;
 
     // Match gallery_item containers for nhentai.xxx
     const galleryRegex = /<div[^>]*class="gallery_item"[^>]*>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/gi;
     const linkRegex = /<a[^>]*href="\/g\/(\d+)\/"/i;
     const titleRegex = /title="([^"]*)"/i;
-    const imgRegex = /<img[^>]*data-src="([^"]*)"[^>]*>/i;
+    const imgRegex = /<img[^>]*(?:data-src|src)="([^"]*)"[^>]*>/i;
     const captionRegex = /<div[^>]*class="caption"[^>]*>([\s\S]*?)<\/div>/i;
 
     let match;
@@ -69,15 +72,17 @@ export class NHentaiScraper extends BaseScraper {
       if (linkMatch) {
         const id = linkMatch[1];
 
-        // Skip if we've already seen this gallery (deduplication within same page)
-        if (seenIds.has(id)) {
+        // Skip if we've already seen this gallery
+        if (this.seenIds.has(id)) {
           continue;
         }
-        seenIds.add(id);
+        this.seenIds.add(id);
 
-        // Prefer title attribute, then caption text
-        let title = titleMatch ? titleMatch[1] : (captionMatch ? captionMatch[1].trim() : `Gallery ${id}`);
-        title = this.decodeHtml(title.trim());
+        // Prefer caption text (which includes artist/circle/language tags), then title attribute
+        let title = captionMatch && captionMatch[1].trim()
+          ? captionMatch[1].trim()
+          : (titleMatch ? titleMatch[1].trim() : `Gallery ${id}`);
+        title = this.decodeHtml(title);
         const coverUrl = imgMatch ? imgMatch[1] : '';
 
         results.push(this.formatGallery({ id, title, coverUrl }));
@@ -95,35 +100,45 @@ export class NHentaiScraper extends BaseScraper {
     return this.getPopular(page);
   }
 
-  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], language = null) {
+  async search(query, page = 1, includeAdult = true, tags = [], excludeTags = [], status = null, adultOnly = false, language = null, sort = 'popular') {
+    // Support options passed as object
+    if (typeof query === 'object' && query !== null) {
+      const opts = query;
+      query = opts.query || opts.q || '';
+      page = opts.page || 1;
+      tags = opts.tags || [];
+      excludeTags = opts.excludeTags || [];
+      language = opts.language || null;
+      sort = opts.sort || 'popular';
+    }
+
     try {
-      // Build search query - nhentai.xxx supports tag search in query
-      let searchQuery = query || '';
+      const cleanQuery = (query || '').trim();
+      const sortParam = sort === 'popular' ? '&sort=popular' : '';
 
-      // Add language filter (english, japanese, chinese)
-      if (language && language !== 'all') {
-        searchQuery += ` language:${language}`;
+      // If no query string, check if language or tags can be used
+      if (!cleanQuery) {
+        if (language && language !== 'all') {
+          const url = `${this.baseUrl}/language/${encodeURIComponent(language)}/?page=${page}${sortParam}`;
+          console.log('[NHentai] Fetching language:', url);
+          const html = await this.fetchHtml(url);
+          if (!html) return [];
+          return this.parseGalleryList(html, page === 1);
+        }
+        if (tags && tags.length > 0) {
+          const tagSlug = encodeURIComponent(tags[0].replace(/^(?:tag|parody|artist|character):/i, ''));
+          const url = `${this.baseUrl}/tag/${tagSlug}/?page=${page}${sortParam}`;
+          console.log('[NHentai] Fetching tag:', url);
+          const html = await this.fetchHtml(url);
+          if (!html) return [];
+          return this.parseGalleryList(html, page === 1);
+        }
+        return sort === 'popular' ? this.getPopular({ page }) : this.getLatest({ page });
       }
 
-      // Add tags to search query if provided
-      if (tags && tags.length > 0) {
-        searchQuery += ' ' + tags.join(' ');
-      }
-
-      // Add excluded tags with minus prefix
-      if (excludeTags && excludeTags.length > 0) {
-        searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
-      }
-
-      searchQuery = searchQuery.trim();
-
-      // If no query at all, return popular instead
-      if (!searchQuery) {
-        return this.getPopular(page, includeAdult, tags, excludeTags, language);
-      }
-
-      // nhentai.xxx uses 'q' parameter for search
-      const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery)}&page=${page}`;
+      // nhentai.xxx uses 'key' parameter for search (NOT 'q')
+      const url = `${this.baseUrl}/search/?key=${encodeURIComponent(cleanQuery)}&page=${page}${sortParam}`;
+      console.log('[NHentai] Searching:', url);
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html, page === 1);
@@ -135,34 +150,14 @@ export class NHentaiScraper extends BaseScraper {
 
   async getPopular(options = {}) {
     // Support both object and positional params for backward compatibility
-    let { page = 1, includeAdult = true, tags = [], excludeTags = [], language = null } = 
+    let { page = 1, language = null } =
       typeof options === 'object' ? options : { page: options };
-    
+
     try {
-      // Defensive: if tags is not an array (e.g., called with sort string), reset it
-      if (!Array.isArray(tags)) {
-        tags = [];
-      }
-      if (!Array.isArray(excludeTags)) {
-        excludeTags = [];
-      }
-
-      // If tags or language provided, use search with popular sort
-      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
-        let searchQuery = tags.join(' ');
-        if (language && language !== 'all') {
-          searchQuery += ` language:${language}`;
-        }
-        if (excludeTags.length > 0) {
-          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
-        }
-        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&sort=popular&page=${page}`;
-        const html = await this.fetchHtml(url);
-        if (!html) return [];
-        return this.parseGalleryList(html, page === 1);
-      }
-
-      const url = `${this.baseUrl}/?sort=popular&page=${page}`;
+      const url = language && language !== 'all'
+        ? `${this.baseUrl}/language/${encodeURIComponent(language)}/?sort=popular&page=${page}`
+        : `${this.baseUrl}/?sort=popular&page=${page}`;
+      console.log('[NHentai] Fetching popular:', url);
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html, page === 1);
@@ -174,34 +169,14 @@ export class NHentaiScraper extends BaseScraper {
 
   async getLatest(options = {}) {
     // Support both object and positional params for backward compatibility
-    let { page = 1, includeAdult = true, tags = [], excludeTags = [], language = null } = 
+    let { page = 1, language = null } =
       typeof options === 'object' ? options : { page: options };
-    
+
     try {
-      // Defensive: if tags is not an array (e.g., called with sort string), reset it
-      if (!Array.isArray(tags)) {
-        tags = [];
-      }
-      if (!Array.isArray(excludeTags)) {
-        excludeTags = [];
-      }
-
-      // If tags or language provided, use search
-      if (tags.length > 0 || excludeTags.length > 0 || (language && language !== 'all')) {
-        let searchQuery = tags.join(' ');
-        if (language && language !== 'all') {
-          searchQuery += ` language:${language}`;
-        }
-        if (excludeTags.length > 0) {
-          searchQuery += ' ' + excludeTags.map(t => `-${t}`).join(' ');
-        }
-        const url = `${this.baseUrl}/search/?q=${encodeURIComponent(searchQuery.trim())}&page=${page}`;
-        const html = await this.fetchHtml(url);
-        if (!html) return [];
-        return this.parseGalleryList(html, page === 1);
-      }
-
-      const url = page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl;
+      const url = language && language !== 'all'
+        ? `${this.baseUrl}/language/${encodeURIComponent(language)}/?page=${page}`
+        : (page > 1 ? `${this.baseUrl}/?page=${page}` : this.baseUrl);
+      console.log('[NHentai] Fetching latest:', url);
       const html = await this.fetchHtml(url);
       if (!html) return [];
       return this.parseGalleryList(html, page === 1);
