@@ -211,6 +211,10 @@ function getRefererForUrl(url) {
     if (hostname.includes('hentaiera')) {
       return 'https://hentaiera.com/';
     }
+    // HentaiForce
+    if (hostname.includes('hentaiforce')) {
+      return 'https://hentaiforce.net/';
+    }
     // Hitomi
     if (hostname.includes('hitomi')) {
       return 'https://hitomi.la/';

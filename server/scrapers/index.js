@@ -6,6 +6,7 @@ import { EHentaiScraper } from './ehentai.js';
 import HentaieraScraper from './hentaiera.js';
 import { BatoScraper } from './bato.js';
 import HentaiEnvyScraper from './hentaienvy.js';
+import HentaiForceScraper from './hentaiforce.js';
 
 // Fast cache - 5 min for results, check every 60s for cleanup
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: false });
@@ -49,6 +50,7 @@ const scrapers = {
   ehentai: new EHentaiScraper(),
   hentaiera: new HentaieraScraper(),
   hentaienvy: new HentaiEnvyScraper(),
+  hentaiforce: new HentaiForceScraper(),
   bato: new BatoScraper(),
 };
 
@@ -140,6 +142,20 @@ export const sources = {
     enabled: true,
     description: 'Hentai manga, doujinshi & image sets',
     contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'imageset', 'cosplay'],
+    filters: {
+      tags: true,
+      status: false,
+      sort: ['popular', 'latest'],
+    },
+  },
+  hentaiforce: {
+    id: 'hentaiforce',
+    name: 'HentaiForce',
+    icon: '⚡',
+    isAdult: true,
+    enabled: true,
+    description: 'Hentai manga, doujinshi & western comics',
+    contentTypes: ['doujinshi', 'manga', 'artistcg', 'gamecg', 'western', 'comic', 'imageset'],
     filters: {
       tags: true,
       status: false,

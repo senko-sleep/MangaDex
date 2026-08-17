@@ -14,6 +14,7 @@ import NHentaiSource from './nhentai';
 import HentaiReadSource from './hentairead';
 import EHentaiSource from './ehentai';
 import HentaieraSource from './hentaiera';
+import HentaiForceSource from './hentaiforce';
 import AnchiraSource from './anchira';
 import ComickSource from './comick';
 
@@ -34,6 +35,7 @@ const SOURCES = {
   hentairead: HentaiReadSource,
   ehentai: EHentaiSource,
   hentaiera: HentaieraSource,
+  hentaiforce: HentaiForceSource,
   anchira: AnchiraSource,
 };
 
@@ -52,6 +54,7 @@ const sourceStatus = {
   hentairead: { name: 'HentaiRead', available: true, lastCheck: Date.now(), adult: true },
   ehentai: { name: 'E-Hentai', available: true, lastCheck: Date.now(), adult: true },
   hentaiera: { name: 'Hentaiera', available: true, lastCheck: Date.now(), adult: true },
+  hentaiforce: { name: 'HentaiForce', available: true, lastCheck: Date.now(), adult: true },
   anchira: { name: 'Anchira', available: true, lastCheck: Date.now(), adult: true },
 };
 
